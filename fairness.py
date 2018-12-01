@@ -50,9 +50,6 @@ class RandomizedPolicy(object):
         #for z in range(len(theta)):
         #    theta[z] *= theta_ratio
 
-        print('THETA:')
-        print(theta)
-
         # Initialize set of basic matchings #
         # CK: hacky preprocessing to include at least one matching per rider
         # We want *a* feasible solution.
@@ -275,9 +272,6 @@ class RandomizedPolicy(object):
         riders_bin_vector = [0 for y in range(nRequests)]
         riders_list = []
         cost = 0.
-        print('WTF')
-        for q in matching_dictionary:
-            print(q)
         for driver_idx in range(len(matching_dictionary)):
             if matching_dictionary[driver_idx] is None: continue
             for sch, isChosen in matching_dictionary[driver_idx].items():
@@ -286,12 +280,10 @@ class RandomizedPolicy(object):
                     if isChosen >= 1.0:
                         cost += self.solver.COST[driver_idx][sch]
                     continue
-                print(isChosen)
                 if isinstance(isChosen, float) or isinstance(isChosen, int):
                     if isChosen == 0.: continue
                 else:
                     if isChosen.getAttr('X') <= 0.: continue
-                    print('isChosen', isChosen.getAttr('X'))
                 for z in sch:
                     drivers_riders_bin_matrix[driver_idx][z] = 1
                     riders_bin_vector[z] += 1
