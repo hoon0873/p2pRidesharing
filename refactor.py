@@ -34,6 +34,7 @@ class RidesharingProblem(object):
         self.COST = None
         self.preprocessed = False
         self.R, self.D, self.T = None, None, None
+        self.COST, self.RTV, self.SCHEDULE = None, None, None
 
         self.params = params
 
