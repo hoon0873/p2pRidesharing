@@ -1,22 +1,12 @@
-import numpy as np
-# import networkx as nx
-import pylab
 import time
 import random as rd
-import gurobipy as grb
 from Classes import Driver
 from Classes import Passenger
-##from NewFeasible import travel
-from itertools import combinations as COMB
-import math
-##import NewMatchingRTV as nrtv
-##import NewMatchingRTV2 as nrtv2
 import NewMatchingRTV3 as nrtv3
 from NewFeasibleBruthWTime import Distance
-import twoMILP as mlp
-import twoMILPPrun as mlp2
-import DecompMILPPrun as mlp3
+import logging
 
+logger = logging.getLogger('DataGenerator')
 
 class DataGenerator(object):
     '''
@@ -53,7 +43,7 @@ class DataGenerator(object):
         ##    timeF.seek(0)
 
         BEGINTIME = time.clock()
-        print("#DRIVERS",D)
+        logger.info("#DRIVERS",D)
         ACNT = 0
         BCNT = 0
         CCNT = 0
@@ -170,10 +160,10 @@ class DataGenerator(object):
 
 
             drivers.append(Driver(ori,des,tim,etim,ptim,cap,cdev,cdet,val,rho,maxdev))
-            print('drivers.append(Driver(',ori,",",des,",",tim,",",etim,","
+            logger.info('drivers.append(Driver(',ori,",",des,",",tim,",",etim,","
                   ,ptim,",",cap,",",cdev,",",cdet,",",val,",",rho,",",maxdev,'))')
-        print('# COUNTS: ',ACNT,BCNT,CCNT,DCNT,ECNT)
-        print("#REQUESTS",R)
+        logger.info('# COUNTS: ',ACNT,BCNT,CCNT,DCNT,ECNT)
+        logger.info("#REQUESTS",R)
 
         ACNT = 0
         BCNT = 0
@@ -270,9 +260,9 @@ class DataGenerator(object):
 
 
             reqs.append(Passenger(ori,des,tim,etim,ptim,cdev,cdet,val,lamb,maxdev))
-            print('reqs.append(Passenger(',ori,",",des,",",tim,",",etim,",",ptim,
+            logger.info('reqs.append(Passenger(',ori,",",des,",",tim,",",etim,",",ptim,
                   ",",cdev,",",cdet,",",val,",",lamb,",",maxdev,'))')
-        print('# COUNTS: ',ACNT,BCNT,CCNT,DCNT,ECNT)
+        logger.info('# COUNTS: ',ACNT,BCNT,CCNT,DCNT,ECNT)
 
         newRho = rhoo
         for i in range(D):
