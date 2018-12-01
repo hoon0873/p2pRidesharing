@@ -47,9 +47,6 @@ class RandomizedPolicy(object):
             theta = [1./nRequests] * nRequests # TODO: refactor, change to something less conservative
         theta = self.preprocessTheta(theta, nRequests, schedules)
 
-        #for z in range(len(theta)):
-        #    theta[z] *= theta_ratio
-
         # Initialize set of basic matchings #
         # CK: hacky preprocessing to include at least one matching per rider
         # We want *a* feasible solution.
@@ -64,7 +61,6 @@ class RandomizedPolicy(object):
         assert False
         """
         matchings = [] # contains full matching info. #TODO refactor to class
-        # matching_vectors = [] #
         matching_costs = []
         matching_riders = []
         for raw_matching in minimal_raw_matchings:
@@ -192,9 +188,6 @@ class RandomizedPolicy(object):
         final_matchings = matching_riders
 
         return final_objective, final_solution, final_costs, final_matchings
-
-
-
 
     def preprocessTheta(self, THETA_DEFAULT, nRequests, schedules):
         # Change theta for infeasible riders to be 0
