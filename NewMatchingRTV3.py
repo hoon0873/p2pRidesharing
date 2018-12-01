@@ -68,7 +68,7 @@ def Greedy(rList, iSeq, cap = math.inf):
 
 
 
-def MatchingRTV(drivers,reqs, RHO =None):
+def MatchingRTV(drivers,reqs, RHO =None, STABLE=False):
     R = len(reqs)
     D = len(drivers)
     T = min(drivers[i].et for i in range(D))
@@ -465,7 +465,7 @@ def MatchingRTV(drivers,reqs, RHO =None):
                     SimilarD[d2].add(d1)
                 else:
                     SimilarD[d2] = set([d1])
-    print(SimilarD)
+    if MUTE !=0: print(SimilarD)
                 
 
 
@@ -507,6 +507,7 @@ def MatchingRTV(drivers,reqs, RHO =None):
     Trips = []
     TripCosts = []
     feaReqs = []
+    unsatReqs = set(range(R))
     for r in range(R):
         RTV.add_node(r)
     for i in range(D):
@@ -524,6 +525,14 @@ def MatchingRTV(drivers,reqs, RHO =None):
             Trips[i][0].add(Tr)
             RTV.add_edge(r,Tr)
             RTV.add_edge(Tr,DRIVER)
+
+        for r in range(R):
+            if r in feaReqs[i] and r in unsatReqs:
+                unsatReqs.remove(r)
+
+##    if MUTE!=0: print(feaReqs)
+##    if MUTE!=0: print(unsatReqs)
+    
 
     # RTV Graph
     ##Trip = []
@@ -893,6 +902,57 @@ def MatchingRTV(drivers,reqs, RHO =None):
                                  for v in RTV.neighbors(tuple(trip)))
                     + y[j] == 1)
 
+    # STABILITY CONSTRAINT
+
+    def tripLength(S):
+        if 'EMPTY' in S:
+            return 0
+        else:
+            return len(S)
+    if STABLE == True:
+        for d in range(D):
+            for S in RTV.predecessors('d'+str(d)):
+    ##            print()
+    ##            print("D:S:  ",d,S)
+    ##            print(COST[d][S]/(tripLength(S)+1))
+                if 'EMPTY' in S:
+                    setS = set()
+                else:
+                    setS = S
+    ##
+    ##            for Sp in RTV.predecessors('d'+str(d)):
+    ##                if COST[d][Sp]/(tripLength(Sp)+1) <= COST[d][S]/(tripLength(S)+1):
+    ##                    print(d,Sp)
+    ##
+    ##            for r in setS:
+    ##                for Sp in RTV.neighbors(r):
+    ##                    for dp in RTV.neighbors(tuple(Sp)):
+    ##                        if COST[int(dp[1:])][Sp]/(tripLength(Sp)+1) <= COST[d][S]/(tripLength(S)+1):
+    ##                            print(int(dp[1:]),Sp)
+    ##
+    ##            for r in setS:
+    ##                if reqs[r].lamb <= COST[d][S]/(tripLength(S)+1):
+    ##                    print(r)
+                                                    
+                m.addConstr(grb.quicksum(x[d][Sp]
+                                         for Sp in RTV.predecessors('d'+str(d))
+                                           if COST[d][Sp]/(tripLength(Sp)+1) <= COST[d][S]/(tripLength(S)+1)
+                                         )
+                            + grb.quicksum(x[int(dp[1:])][Sp]
+                                           for r in setS
+                                           for Sp in RTV.neighbors(r)
+                                           for dp in RTV.neighbors(tuple(Sp))
+                                             if COST[int(dp[1:])][Sp]/(tripLength(Sp)+1) <= COST[d][S]/(tripLength(S)+1)
+                                           )
+                            + grb.quicksum(y[r]
+                                           for r in setS
+                                             if reqs[r].lamb <= COST[d][S]/(tripLength(S)+1))
+                            + x[d][S]
+        ##                        + grb.quicksum(x[dp][Sp]
+        ##                                       for dp)
+                            >= 1)
+            
+
     # OBJECTIVE FUNCTION
     m.setObjective(grb.quicksum(COST[d][S]*x[d][S]
                             for d in range(D)
@@ -1031,37 +1091,41 @@ if __name__ == "__main__":
     ##DRIVERS 7
     drivers.append(Driver( (0, 1) , (14, 16) , 0 , 60 , 0 , 4 , 1 , 6 , 158 , 1.2 ))
     drivers.append(Driver( (24, 26) , (13, 20) , 0 , 60 , 0 , 4 , 1 , 6 , 100 , 1.2 ))
-    drivers.append(Driver( (2, 2) , (12, 15) , 0 , 60 , 0 , 4 , 1 , 6 , 226 , 1.2 ))
-    drivers.append(Driver( (24, 26) , (18, 12) , 0 , 60 , 0 , 4 , 1 , 6 , 151 , 1.2 ))
-    drivers.append(Driver( (1, 5) , (14, 13) , 0 , 60 , 0 , 4 , 1 , 6 , 120 , 1.2 ))
-    drivers.append(Driver( (24, 29) , (14, 18) , 0 , 60 , 0 , 4 , 1 , 6 , 180 , 1.2 ))
-    drivers.append(Driver( (3, 5) , (18, 13) , 0 , 60 , 0 , 4 , 1 , 6 , 217 , 1.2 ))
-    ##REQUESTS 21
+##    drivers.append(Driver( (2, 2) , (12, 15) , 0 , 60 , 0 , 4 , 1 , 6 , 226 , 1.2 ))
+##    drivers.append(Driver( (24, 26) , (18, 12) , 0 , 60 , 0 , 4 , 1 , 6 , 151 , 1.2 ))
+##    drivers.append(Driver( (1, 5) , (14, 13) , 0 , 60 , 0 , 4 , 1 , 6 , 120 , 1.2 ))
+##    drivers.append(Driver( (24, 29) , (14, 18) , 0 , 60 , 0 , 4 , 1 , 6 , 180 , 1.2 ))
+##    drivers.append(Driver( (3, 5) , (18, 13) , 0 , 60 , 0 , 4 , 1 , 6 , 217 , 1.2 ))
+##    ##REQUESTS 21
     reqs.append(Passenger( (4, 3) , (18, 15) , 2 , 35 , 9 , 1 , 3 , 120 , 120 ))
     reqs.append(Passenger( (29, 25) , (14, 15) , 6 , 50 , 18 , 1 , 3 , 89 , 89 ))
     reqs.append(Passenger( (4, 5) , (20, 18) , 3 , 52 , 17 , 1 , 3 , 148 , 148 ))
     reqs.append(Passenger( (28, 25) , (16, 16) , 9 , 38 , 16 , 1 , 3 , 72 , 72 ))
     reqs.append(Passenger( (3, 1) , (14, 20) , 3 , 40 , 10 , 1 , 3 , 148 , 148 ))
     reqs.append(Passenger( (29, 25) , (18, 14) , 3 , 45 , 16 , 1 , 3 , 116 , 116 ))
-    reqs.append(Passenger( (0, 1) , (15, 14) , 3 , 45 , 14 , 1 , 3 , 115 , 115 ))
+##    reqs.append(Passenger( (0, 1) , (15, 14) , 3 , 45 , 14 , 1 , 3 , 115 , 115 ))
     reqs.append(Passenger( (28, 27) , (17, 17) , 9 , 24 , 9 , 1 , 3 , 89 , 89 ))
-    reqs.append(Passenger( (0, 2) , (15, 17) , 1 , 33 , 6 , 1 , 3 , 158 , 158 ))
+##    reqs.append(Passenger( (0, 2) , (15, 17) , 1 , 33 , 6 , 1 , 3 , 158 , 158 ))
     reqs.append(Passenger( (27, 25) , (13, 20) , 6 , 27 , 9 , 1 , 3 , 94 , 94 ))
-    reqs.append(Passenger( (4, 0) , (13, 17) , 0 , 31 , 5 , 1 , 3 , 108 , 108 ))
-    reqs.append(Passenger( (28, 25) , (18, 18) , 13 , 28 , 14 , 1 , 3 , 67 , 67 ))
-    reqs.append(Passenger( (1, 2) , (20, 17) , 1 , 44 , 10 , 1 , 3 , 146 , 146 ))
-    reqs.append(Passenger( (28, 27) , (17, 16) , 2 , 45 , 15 , 1 , 3 , 116 , 116 ))
-    reqs.append(Passenger( (0, 3) , (18, 16) , 4 , 33 , 7 , 1 , 3 , 125 , 125 ))
-    reqs.append(Passenger( (24, 29) , (18, 12) , 8 , 38 , 13 , 1 , 3 , 116 , 116 ))
-    reqs.append(Passenger( (2, 3) , (20, 12) , 2 , 52 , 16 , 1 , 3 , 120 , 120 ))
-    reqs.append(Passenger( (28, 29) , (16, 12) , 6 , 32 , 8 , 1 , 3 , 116 , 116 ))
-    reqs.append(Passenger( (2, 5) , (16, 16) , 1 , 35 , 9 , 1 , 3 , 88 , 88 ))
-    reqs.append(Passenger( (26, 28) , (20, 17) , 9 , 22 , 9 , 1 , 3 , 85 , 85 ))
-    reqs.append(Passenger( (1, 3) , (13, 13) , 4 , 35 , 11 , 1 , 3 , 101 , 101 ))
+##    reqs.append(Passenger( (4, 0) , (13, 17) , 0 , 31 , 5 , 1 , 3 , 108 , 108 ))
+##    reqs.append(Passenger( (28, 25) , (18, 18) , 13 , 28 , 14 , 1 , 3 , 67 , 67 ))
+##    reqs.append(Passenger( (1, 2) , (20, 17) , 1 , 44 , 10 , 1 , 3 , 146 , 146 ))
+##    reqs.append(Passenger( (28, 27) , (17, 16) , 2 , 45 , 15 , 1 , 3 , 116 , 116 ))
+##    reqs.append(Passenger( (0, 3) , (18, 16) , 4 , 33 , 7 , 1 , 3 , 125 , 125 ))
+##    reqs.append(Passenger( (24, 29) , (18, 12) , 8 , 38 , 13 , 1 , 3 , 116 , 116 ))
+##    reqs.append(Passenger( (2, 3) , (20, 12) , 2 , 52 , 16 , 1 , 3 , 120 , 120 ))
+##    reqs.append(Passenger( (28, 29) , (16, 12) , 6 , 32 , 8 , 1 , 3 , 116 , 116 ))
+##    reqs.append(Passenger( (2, 5) , (16, 16) , 1 , 35 , 9 , 1 , 3 , 88 , 88 ))
+##    reqs.append(Passenger( (26, 28) , (20, 17) , 9 , 22 , 9 , 1 , 3 , 85 , 85 ))
+##    reqs.append(Passenger( (1, 3) , (13, 13) , 4 , 35 , 11 , 1 , 3 , 101 , 101 ))
 ##
 ##
     print("Social Welfare")
-    m,x,valSW_SW,valEFF_SW,runtime = MatchingRTV(drivers,reqs,RHO=None)
+    m,x,valSW_SW,valEFF_SW,runtime = MatchingRTV(drivers,reqs,RHO=None, STABLE=True)
+    print(valSW_SW,valEFF_SW)
+    print()
+    print("Social Welfare")
+    m,x,valSW_SW,valEFF_SW,runtime = MatchingRTV(drivers,reqs,RHO=None, STABLE=False)
     print(valSW_SW,valEFF_SW)
     print()
 
