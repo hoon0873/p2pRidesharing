@@ -317,7 +317,7 @@ if __name__ == '__main__':
     # nRequests = 100
     # nDrivers = 10
 
-    nRequests = 10
+    nRequests = 100
     nDrivers = 10
 
     seed = 142857
@@ -335,6 +335,7 @@ if __name__ == '__main__':
     baseline_theta = 1./ nRequests
     theta_basic = [random.uniform(baseline_theta*0.3, baseline_theta*1) for j in range(nRequests)]
 
+    """
     final_objective, final_solution, final_costs, final_matchings = policySolver.solve(theta=theta_basic)
     print('----')
     for m in final_matchings: # bin matrix
@@ -342,18 +343,17 @@ if __name__ == '__main__':
     print('----')
     print(final_solution)
     print(final_costs)
-
+    """
 
     objectives = []
-    change_idx = 8
+    # change_idx = 8
     theta_ratios = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.]
     theta_scaled = deepcopy(theta_basic)
     for theta_ratio in theta_ratios:
-        theta_scaled[change_idx] = theta_basic[change_idx] * theta_ratio
+        #theta_scaled[change_idx] = theta_basic[change_idx] * theta_ratio
+        theta_scaled = [theta_basic[i] * theta_ratio for i in range(len(theta_basic))]
         final_objective, final_solution, final_costs, final_matchings = policySolver.solve(theta = theta_scaled)
         objectives.append(final_objective)
-        print(theta_scaled)
-        assert False
 
     print('objectives:')
     print(objectives)
