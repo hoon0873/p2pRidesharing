@@ -1,23 +1,16 @@
 import numpy as np
 import networkx as nx
-import pylab
 import time
 import random as rd
 import gurobipy as grb
-from Classes import Driver
-from Classes import Passenger
-##from NewFeasibleBruth import travel
 from NewFeasibleBruthWTime import travel
-from Feasible import travel as travelMILP
-from itertools import combinations as COMB
 from NewFeasibleBruth import Distance
-import math
 from types import SimpleNamespace
+import logging
 
 DEFAULT_PARAMS = SimpleNamespace()
 DEFAULT_PARAMS.LAMBDA = 1
 DEFAULT_PARAMS.BIGNUMBER = 5
-DEFAULT_PARAMS.MUTE = 0 # Set to 0 to Mute
 DEFAULT_PARAMS.LBPRUN = 1 # Set to 1 to do LB Pruning
 DEFAULT_PARAMS.RVPRUN = 1 # Set to 1 to do RV Pruning
 DEFAULT_PARAMS.GreedySWITCH = 0 # Set to 1 to do Greedy
@@ -26,8 +19,9 @@ DEFAULT_PARAMS.SIMDPRUN = 1 # set to 1 to do similar Drivers pruning
 DEFAULT_PARAMS.CONTINUOUS = 0
 DEFAULT_PARAMS.TimeSwitch = 1 # set to 1 to do timelimit
 DEFAULT_PARAMS.TimeLIMIT = 60*60*2
-DEFAULT_PARAMS.TIMEMUTE = 0 # Set 0 to mute; 1 to see high level timeline; 2 to detailed timeline;
 DEFAULT_PARAMS.RHO = 1.2 # May want to change this
+
+logger = logging.getLogger('RidesharingProblem')
 
 
 class RidesharingProblem(object):
@@ -179,13 +173,10 @@ class RidesharingProblem(object):
                             -min(d.cdev,J.cdev*d.rho)*abs(J.pt-d.pt-Distance(d.ori,J.ori))< -1e-5: #driver cannot be IR
                         continue
 
-                if self.params.TIMEMUTE >=2:
-                    print('   ---- before travel', time.clock()-BEGINTIME)
+                logger.info('   ---- before travel', time.clock()-BEGINTIME)
                 bol, cost, route = travel(drivers[i],[J], RHO=self.params.RHO)
-                if self.params.TIMEMUTE >=2:
-                    print('\t', bol, cost, route, i, j)
-                if self.params.TIMEMUTE >=2:
-                    print('   ---- after travel', time.clock()-BEGINTIME)
+                logger.info('\t', bol, cost, route, i, j)
+                logger.info('   ---- after travel', time.clock()-BEGINTIME)
                 ##            if TIMEMUTE !=0: print('\tbefore travel MILP', time.clock()-BEGINTIME)
                 ##            bol2,cost2,route2 = travelMILP(drivers[i],[J])
                 ##            if TIMEMUTE !=0: print('\tafter travel MILP', time.clock()-BEGINTIME)
@@ -217,10 +208,8 @@ class RidesharingProblem(object):
         ##                RV.add_edge('d'+str(i), j, weight=cost)
         ##                COST[i][tuple({j})] = cost
 
-        if self.params.MUTE != 0:
-            print(feasibleMat)
-        if self.params.TIMEMUTE >=1:
-            print("Finished RV Time: %f" %(time.clock()-BEGINTIME))
+        logger.info(feasibleMat)
+        logger.info("Finished RV Time: %f" %(time.clock()-BEGINTIME))
         ##    print(FeasibleMat)
 
         ######################################################333#############################
@@ -238,7 +227,7 @@ class RidesharingProblem(object):
                         SimilarD[d2].add(d1)
                     else:
                         SimilarD[d2] = set([d1])
-        print(SimilarD)
+        logger.info(SimilarD)
 
 
         ############ RUN WEILONG"S ALGORITHM FOR DECOMPOSING SINGLE DRIVER ###################
@@ -293,7 +282,7 @@ class RidesharingProblem(object):
         ############# End extracted portion ############
 
 
-        if self.params.TIMEMUTE >=1: print("FINISH PREPROCESSING OPTIMIZING %f" %(time.clock()-BEGINTIME))
+        logger.info("FINISH PREPROCESSING OPTIMIZING %f" %(time.clock()-BEGINTIME))
 
         ## ADD EMPTY SET
         for i in range(D):
@@ -304,8 +293,8 @@ class RidesharingProblem(object):
                                            ('d',drivers[i].pt+Distance(drivers[i].ori, drivers[i].des))]
             ##        COST[i]['EMPTY'+str(i)] = 0 # By convension we only care about detour and deviation cost
 
-        print('================COST==============')
-        print(COST)
+        logger.info('================COST==============')
+        logger.info(COST)
         self.COST, self.RTV, self.SCHEDULE = COST, RTV, SCHEDULE
 
     def constructRTV2toR(self, BEGINTIME, COST, COUNT, D, R, RTV, SCHEDULE, SimilarD, TripCosts, Trips, drivers,
@@ -315,7 +304,7 @@ class RidesharingProblem(object):
             TripCost = TripCosts[i]
             feaReq = feaReqs[i]
             DRIVER = 'd' + str(i)
-            if self.params.TIMEMUTE >= 1: print("\nRestart Driver %d\n" % (i))
+            logger.info("\nRestart Driver %d\n" % (i))
 
             for TSize in range(2, R):
                 INFEASIBELTRIP = set()
@@ -325,33 +314,33 @@ class RidesharingProblem(object):
                 Trip.append(set())
                 if self.params.LBPRUN != 0:
                     PrevTripCost = TripCost
-                    if self.params.TIMEMUTE >= 2: print("    PREV TRIP LENGTH",
+                    logger.info("    PREV TRIP LENGTH",
                                                         len(PrevTripCost))  # Dict of (SET : cost, Schedule)
                     TripCost = {}
-                if self.params.TIMEMUTE >= 1: print("  There %d candidate trips" % (COUNT))
-                if self.params.TIMEMUTE >= 1: print(
+                logger.info("  There %d candidate trips" % (COUNT))
+                logger.info(
                     "  There are %d trips of size %d\t%f" % (len(Trip[TSize - 1]), TSize, time.clock() - BEGINTIME))
-                if self.params.TIMEMUTE >= 1: print("\n  Now Computing Tsize %d:" % (TSize + 1))
-                if self.params.TIMEMUTE >= 3: print("TRIP LIST: ", len(Trip[TSize - 1]))
+                logger.info("\n  Now Computing Tsize %d:" % (TSize + 1))
+                logger.info("TRIP LIST: ", len(Trip[TSize - 1]))
                 if len(Trip[TSize - 1]) == 0: break
                 COUNT = 0
                 TravelCOUNT = 0
                 for T1 in Trip[TSize - 1]:
 
-                    if COUNT == 0 and self.params.TIMEMUTE >= 2:
-                        print('\t\t', T1)
+                    if COUNT == 0:
+                        logger.info('\t\t', T1)
 
                     if self.params.TimeSwitch != 0 and time.clock() - BEGINTIME > self.params.TimeLIMIT:
                         break
                     ##                for T2 in Trip[TSize-1]:
                     ##                    TUT = set(T1).union(set(T2))
                     for req in feaReq:
-                        if self.params.TIMEMUTE >= 2: print('\tbefore clique', time.clock() - BEGINTIME)
+                        logger.info('\tbefore clique', time.clock() - BEGINTIME)
                         TUT = set(T1).union({req})
                         if len(TUT) != TSize + 1: continue
                         if tuple(sorted(TUT)) in Trip[TSize]: continue
                         if tuple(sorted(TUT)) in INFEASIBELTRIP: continue
-                        if self.params.TIMEMUTE >= 2: print(tuple(sorted(TUT)), Trip[TSize])
+                        logger.info(tuple(sorted(TUT)), Trip[TSize])
                         reqList = sorted(list(TUT))
 
                         invReqList = {}
@@ -396,13 +385,13 @@ class RidesharingProblem(object):
                             INFEASIBELTRIP.add(tuple(sorted(TUT)))
                             ##                        if TIMEMUTE >=1: print('\t',TUT)
                             SKIP = 0
-                            if self.params.TIMEMUTE >= 2: print('\tafter clique', time.clock() - BEGINTIME)
+                            logger.info('\tafter clique', time.clock() - BEGINTIME)
                             continue
 
                         if SKIP == 0:
                             INFEASIBELTRIP.add(tuple(sorted(TUT)))  ## ALREADY CONSIDERED NOW NO NEED TO CONSIDER
                             reqList = sorted(list(TUT))
-                            if self.params.TIMEMUTE >= 2: print('passed: ', tuple(sorted(TUT)))
+                            logger.info('passed: ', tuple(sorted(TUT)))
                             COUNT += 1
 
                             ##                        invReqList = {}
@@ -436,7 +425,7 @@ class RidesharingProblem(object):
                                     ##                                LB += reqs[req].lamb
                                     ##                                INFEASIBLEUB = LB+reqs[req].lamb
                                     UB = None
-                                    if self.params.TIMEMUTE >= 2: print("POSSIBLE PREV ROUTES: ", ALLT1SETS)
+                                    logger.info("POSSIBLE PREV ROUTES: ", ALLT1SETS)
                                     ROUTE = ROUTE1
                                     req2 = rd.choice(T1)
                                     TMPTUT = set(TUT)
@@ -467,11 +456,11 @@ class RidesharingProblem(object):
                                         else:
                                             tmpUBR = self.computeUBroutes(RTT1, RTT2, req1, req2)
                                             UBRs += tmpUBR
-                                        if self.params.TIMEMUTE >= 2: print("\tUB:: ", UBRs)
+                                        logger.info("\tUB:: ", UBRs)
                                     else:
-                                        if self.params.TIMEMUTE >= 2: print("\tT2 Not Found", T1, T2)
+                                        logger.info("\tT2 Not Found", T1, T2)
                                 else:
-                                    if self.params.TIMEMUTE >= 2: print("\t   WAS NOT IN PREV COST", T1, T2)
+                                    logger.info("\t   WAS NOT IN PREV COST", T1, T2)
                                     UB = None
                                     LB = None
                                     ROUTE = None
@@ -496,10 +485,10 @@ class RidesharingProblem(object):
                                                 pvRt = curROUTE
                                     grdCost = pvCost
 
-                                if self.params.TIMEMUTE >= 2: print('\tbefore travel', time.clock() - BEGINTIME)
+                                logger.info('\tbefore travel', time.clock() - BEGINTIME)
                                 bol, cost, route = travel(drivers[i], reqL, LB=LB, UB=UB, RHO=self.params.RHO,
                                                           UBROUTE=UBRs, INFEASIBLEUB=INFEASIBLEUB)
-                                if self.params.TIMEMUTE >= 2: print('\tafter travel', time.clock() - BEGINTIME, '\t',
+                                logger.info('\tafter travel', time.clock() - BEGINTIME, '\t',
                                                                     bol)
 
                                 ##                            if TIMEMUTE !=0: print('\tbefore travel MILP', time.clock()-BEGINTIME)
@@ -508,13 +497,14 @@ class RidesharingProblem(object):
                                 ##                            print('\t',bol,bol2,cost,cost2)
                                 ##
 
-                                if self.params.MUTE == 3: print('COST:\t', cost)
+                                logger.info('COST:\t', cost)
 
                             else:  # LPPRUN == 0
-                                if TSize >= 5 and self.params.MUTE != 0: print(reqList)
-                                if self.params.TIMEMUTE >= 2: print('\t\tbefore travel\t', time.clock() - BEGINTIME)
+                                if TSize >= 5:
+                                    logger.info(reqList)
+                                logger.info('\t\tbefore travel\t', time.clock() - BEGINTIME)
                                 bol, cost, route = travel(drivers[i], reqL, RHO=self.params.RHO)
-                                if self.params.TIMEMUTE >= 2: print('\t\tafter travel\t', time.clock() - BEGINTIME,
+                                logger.info('\t\tafter travel\t', time.clock() - BEGINTIME,
                                                                     '\t', bol)
 
                             ##                            if TIMEMUTE !=0: print('\tbefore travel MILP', time.clock()-BEGINTIME)
@@ -537,7 +527,7 @@ class RidesharingProblem(object):
                                 ##                            print(i,Tr)
                                 ##                            print(cost)
                                 if self.params.LBPRUN != 0: TripCost[TUT] = (cost, route)
-                if self.params.MUTE != 0: print('COUNT:\t', COUNT)
+                logger.info('COUNT:\t', COUNT)
 
     def constructRTV(self, BEGINTIME, COST, D, R, RV, SCHEDULE, drivers, reqs):
         # RV Graph
@@ -569,16 +559,16 @@ class RidesharingProblem(object):
             COUNT = 0
             feaReq = feaReqs[i]
             Trip = Trips[i]
-            if self.params.TIMEMUTE >= 1: print("\n\nRTV: Driver %d starting Time: %f" % (i, time.clock() - BEGINTIME))
+            logger.info("\n\nRTV: Driver %d starting Time: %f" % (i, time.clock() - BEGINTIME))
             ##        for UNNECESSARY in range(2):
             ##            Trip.append(set())
 
             DRIVER = 'd' + str(i)
-            if self.params.TIMEMUTE >= 1: print(" Number of feasibe requests: %d" % (len(RV.edges(DRIVER))))
+            logger.info(" Number of feasibe requests: %d" % (len(RV.edges(DRIVER))))
 
             ##        if TIMEMUTE >=1: print('StartRTV: ', time.clock()-BEGINTIME)
 
-            if self.params.TIMEMUTE >= 1: print("  Now computeing Tsize 2:")
+            logger.info("  Now computeing Tsize 2:")
             if self.params.LBPRUN != 0: TripCost = {}
             for T1 in Trip[0]:
                 for T2 in Trip[0]:
@@ -595,10 +585,10 @@ class RidesharingProblem(object):
                     reqIndex = [r1, r2]
                     INFEASIBLEUB = min(COST[i][tuple({r1})] + reqs[r2].lamb, COST[i][tuple({r2})] + reqs[r1].lamb)
                     ##                print(reqList)
-                    if self.params.TIMEMUTE >= 2: print('\tbefore travel', time.clock() - BEGINTIME)
+                    logger.info('\tbefore travel', time.clock() - BEGINTIME)
                     COUNT += 1
                     bol, cost, route = travel(drivers[i], reqList, RHO=self.params.RHO, INFEASIBLEUB=INFEASIBLEUB)
-                    if self.params.TIMEMUTE >= 2: print('\tafter travel', time.clock() - BEGINTIME)
+                    logger.info('\tafter travel', time.clock() - BEGINTIME)
                     ##                if TIMEMUTE >=2: print('\tbefore travel MILP', time.clock()-BEGINTIME)
                     ##                bol2,cost2,route2 = travelMILP(drivers[i],reqList)
                     ##                if TIMEMUTE >=2: print('\tafter travel MILP', time.clock()-BEGINTIME)
@@ -672,7 +662,7 @@ class RidesharingProblem(object):
 
             TripCosts[i] = TripCost
             feaReqs[i] = feaReq
-            if self.params.TIMEMUTE >= 1: print("  Finished pair (2) \t\t%f" % (time.clock() - BEGINTIME))
+            logger.info("  Finished pair (2) \t\t%f" % (time.clock() - BEGINTIME))
         return COUNT, RTV, TripCosts, Trips, feaReqs
 
     def computeUBroutes(self, RT1, RT2, r1, r2, MUTEWITHINFUNCTION = 0):
@@ -684,10 +674,10 @@ class RidesharingProblem(object):
         :param MUTEWITHINFUNCTION:
         :return:
         """
-        if  MUTEWITHINFUNCTION ==1 :
-            print('RT1 = ',RT1)
-            print('RT2 = ', RT2)
-            print('r1 = ',r1,'\nr2 = ',r2)
+
+        logger.info('RT1 = ',RT1)
+        logger.info('RT2 = ', RT2)
+        logger.info('r1 = ',r1,'\nr2 = ',r2)
 
         THRESHOLD = 10
         UBRS = [[]]
@@ -696,11 +686,10 @@ class RidesharingProblem(object):
         i = 0
         visited = np.zeros(self.R+2)
         while(i < (len(RT1))):
-            if MUTEWITHINFUNCTION == 1:
-                print("\n")
-                print(UBRS[0])
-                print(i,i1,i2)
-                print(RT1[i1][0], RT2[i2][0])
+            logger.info("\n")
+            logger.info(UBRS[0])
+            logger.info(i,i1,i2)
+            logger.info(RT1[i1][0], RT2[i2][0])
             ####            print(RT1[i1+1][0], RT2[i2+1][0])
             ####            print(RT1[i1][0],RT2[i2][0])
             ####            print(UBRS)
@@ -737,16 +726,16 @@ class RidesharingProblem(object):
                     i2+=1
                     break
             while(visited[RT1[i1][0]]) > 1:
-                if MUTEWITHINFUNCTION == 1:print('IN THE VISITED -1')
+                logger.info('IN THE VISITED -1')
                 i1+=1
                 if RT1[i1][0] == 'd': break
             while(visited[RT2[i2][0]]) > 1:
-                if MUTEWITHINFUNCTION == 1:print('IN THE VISITED -2')
+                logger.info('IN THE VISITED -2')
                 i2+=1
                 if RT2[i2][0] == 'd': break
             if RT1[i1][0] == 'd' or RT2[i2][0] =='d': continue
             if RT1[i1][0] == RT2[i2][0]:
-                if MUTEWITHINFUNCTION == 1:print('EQUAL')
+                logger.info('EQUAL')
                 for UBR in UBRS:
                     UBR.append(RT1[i1][0])
                 visited[RT1[i1][0]]+=1
@@ -754,7 +743,7 @@ class RidesharingProblem(object):
                 i2+=1
                 continue
             elif RT1[i1][0] == RT2[i2+1][0] and RT1[i1+1][0] == RT2[i2][0]:
-                if MUTEWITHINFUNCTION == 1:print('DIAG EQUAL')
+                logger.info('DIAG EQUAL')
                 if RT1[i1][1] <= RT2[i2][1]:
                     for UBR in UBRS:
                         UBR.append(RT1[i1][0])
@@ -773,7 +762,7 @@ class RidesharingProblem(object):
                     i2+=2
                 continue
             elif RT1[i1][0] == RT2[i2+1][0] and RT2[i2][0] == r1:
-                if MUTEWITHINFUNCTION == 1:print('-1')
+                logger.info('-1')
                 for UBR in UBRS:
                     UBR.append(RT2[i2][0])
                     UBR.append(RT1[i1][0])
@@ -783,7 +772,7 @@ class RidesharingProblem(object):
                 i2+=2
                 continue
             elif RT1[i1+1][0] == RT2[i2][0] and RT1[i1][0] == r2:
-                if MUTEWITHINFUNCTION == 1:print('-2')
+                logger.info('-2')
                 for UBR in UBRS:
                     UBR.append(RT1[i1][0])
                     UBR.append(RT2[i2][0])
@@ -830,7 +819,7 @@ class RidesharingProblem(object):
                 i1+=1
                 i2+=1
             else:
-                if MUTEWITHINFUNCTION == 1: print("HERE AT THE END")
+                logger.info("HERE AT THE END")
                 if RT1[i1][1] <= RT2[i2][1]:
                     for UBR in UBRS:
                         UBR.append(RT1[i1][0])
@@ -852,10 +841,9 @@ class RidesharingProblem(object):
             i = min(i1,i2)
         for UBR in UBRS:
             if len(UBR) != len(RT1)+2:
-                print("\n\nERROR\n")
-                print(RT1,RT2,r1,r2)
-                print(UBR)
-                print("\n\n")
+                logger.error("\n\nERROR\n")
+                logger.error(RT1,RT2,r1,r2)
+                logger.error(UBR)
                 time.sleep(2)
         return UBRS
 
@@ -926,14 +914,14 @@ class RidesharingProblem(object):
         # Added by CK
         BEGINTIME = time.clock()
 
-        if self.params.TIMEMUTE >=1: print("START MATCHING %f" %(time.clock()-BEGINTIME))
+        logger.info("START MATCHING %f" %(time.clock()-BEGINTIME))
         MILPSTARTTIME = time.clock()
-        m.setParam('OutputFlag', self.params.MUTE)
+        m.setParam('OutputFlag', 0)
         m.optimize()
 
         ENDTIME = time.clock()
-        if self.params.TIMEMUTE >=1: print("Matching Time %f" %(ENDTIME - MILPSTARTTIME))
-        print("\n\nRTV3\t Total Time %f" %(ENDTIME - BEGINTIME))
+        logger.info("Matching Time %f" %(ENDTIME - MILPSTARTTIME))
+        logger.info("\n\nRTV3\t Total Time %f" %(ENDTIME - BEGINTIME))
 
 
         AUD = np.zeros(D) # altruistic Utility
