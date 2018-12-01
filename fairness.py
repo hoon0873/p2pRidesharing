@@ -5,7 +5,7 @@ assume that item_sizes are integers
 
 import numpy as np
 import gurobi as grb
-from refactor import Solver
+from refactor import RidesharingProblem
 from copy import deepcopy
 import random
 import matplotlib as mpl
@@ -18,14 +18,14 @@ class RandomizedPolicy(object):
 
     def __init__(self):
         self.drivers, self.requests = None, None
-        self.solver = Solver()
+        self.problem = RidesharingProblem()
 
     def setData(self, drivers, requests):
         self.drivers, self.requests = drivers, requests
-        self.solver.setData(drivers, requests)
+        self.problem.setData(drivers, requests)
 
     def preprocess(self):
-        self.solver.preprocess()
+        self.problem.preprocess()
 
     def matchingToVector(self, matching):
         """ Adapter converting a list of dictionaries to a list of binary vectors """
@@ -41,7 +41,7 @@ class RandomizedPolicy(object):
 
         model = grb.Model("master")
         model.setParam('OutputFlag', 1)
-        costs, rtv, schedules = self.solver.COST, self.solver.RTV, self.solver.SCHEDULE
+        costs, rtv, schedules = self.problem.COST, self.problem.RTV, self.problem.SCHEDULE
 
         if theta is None:
             theta = [1./nRequests] * nRequests # TODO: refactor, change to something less conservative
@@ -238,7 +238,7 @@ class RandomizedPolicy(object):
     def getImprovedMatching(self, duals):
 
         # Create a modified version of the matching problem
-        modified_cost = deepcopy(self.solver.COST)
+        modified_cost = deepcopy(self.problem.COST)
         print('duals')
         print(duals)
         for d in modified_cost:
@@ -253,7 +253,7 @@ class RandomizedPolicy(object):
         for j in modified_cost:
             print(j)
 
-        temp_ret,x,_,_,_ = self.solver.solve(modified_cost)
+        temp_ret,x,_,_,_ = self.problem.solve(modified_cost)
         return x
 
     def adaptMatching(self, matching_dictionary):
@@ -278,7 +278,7 @@ class RandomizedPolicy(object):
                 if not isChosen: continue
                 if sch[0] == 'E':
                     if isChosen >= 1.0:
-                        cost += self.solver.COST[driver_idx][sch]
+                        cost += self.problem.COST[driver_idx][sch]
                     continue
                 if isinstance(isChosen, float) or isinstance(isChosen, int):
                     if isChosen == 0.: continue
@@ -288,7 +288,7 @@ class RandomizedPolicy(object):
                     drivers_riders_bin_matrix[driver_idx][z] = 1
                     riders_bin_vector[z] += 1
                     riders_list.append(z)
-                cost += self.solver.COST[driver_idx][sch]
+                cost += self.problem.COST[driver_idx][sch]
 
         return tuple(riders_bin_vector), \
                drivers_riders_bin_matrix, \
@@ -321,7 +321,7 @@ if __name__ == '__main__':
     policySolver.setData(drivers, requests)
     policySolver.preprocess()
 
-    print(policySolver.solver.RTV)
+    print(policySolver.problem.RTV)
 
     random.seed(seed)
     baseline_theta = 1./ nRequests

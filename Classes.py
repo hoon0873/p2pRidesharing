@@ -38,3 +38,7 @@ class Passenger:
     def DIST(self):
         if int(abs(self.ori - self.des))==0: return 1
         else: return Distance(i.ori,i.des)
+
+class Matching:
+    def __init__(self, ):
+        pass

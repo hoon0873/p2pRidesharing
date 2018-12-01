@@ -29,7 +29,8 @@ DEFAULT_PARAMS.TimeLIMIT = 60*60*2
 DEFAULT_PARAMS.TIMEMUTE = 0 # Set 0 to mute; 1 to see high level timeline; 2 to detailed timeline;
 DEFAULT_PARAMS.RHO = 1.2 # May want to change this
 
-class Solver(object):
+
+class RidesharingProblem(object):
     def __init__(self, params=DEFAULT_PARAMS):
         """
         :param params: namespace containing parameters
@@ -38,10 +39,9 @@ class Solver(object):
         self.drivers = None
         self.COST = None
         self.preprocessed = False
-
+        self.R, self.D, self.T = None, None, None
 
         self.params = params
-
 
     def setData(self, drivers, requests):
         self.preprocessed = False
@@ -53,58 +53,36 @@ class Solver(object):
         self.T = min(self.drivers[i].et for i in range(self.D))
         self.T = max(self.drivers[i].lt for i in range(self.D)) - self.T
 
-
     def preprocess(self):
         '''
-        Computes cost matrix
-        :return:
+        Computes costs, rtv
         '''
 
         self.preprocessed = True
         BEGINTIME = time.clock()
 
         # Set aliases
-        drivers, reqs = self.drivers, self.requests
+        drivers, requests = self.drivers, self.requests
 
         R, D, T = self.R, self.D, self.T
 
-        # BEGINTIME = time.clock()
         COST = []
         SCHEDULE = []
         for i in range(D):
             COST.append({})
             SCHEDULE.append({})
 
-        # if TIMEMUTE >=1: print("\nSTARTING MATCHINGRTV %f\n" %(time.clock()-BEGINTIME))
-
-
-
-        ##    RT1 = [('d', 0), (0, 4), (3, 8), (1, 9), (3, 24), (1, 27), (0, 30), ('d', 35)]
-        ##    RT2 = [('d', 3), (0, 7), (1, 10), (2, 12), (2, 28), (0, 29), (1, 32), ('d', 39)]
-        ##    r1 = 2
-        ##    r2 = 3
-        ##
-        ##    UBRS = computeUBroutes(RT1,RT2,r1,r2,1)
-        ##    print(UBRS[0])
-
-
-        ##['d', 0, 1, 2, 2, 3, 1, 0, 2, 3, 'd']
-
-
-        c = np.ones(R)*100 # Not Satisfied COST SHOULD change to LAMBDA
-        ##    lambdaCost = np.ones(R)*1000 # Not satisfied Cost
-
-        # RV Graph
-        FeasibleMat = np.zeros((D,R), dtype=int)
+        # Compute RV Graph
+        feasibleMat = np.zeros((D, R), dtype=int)
 
         RV = nx.Graph()
         for j in range(R):
-            J = reqs[j]
+            J = requests[j]
             for jp in range(R):
-                if j == jp: continue
+                if j == jp:
+                    continue
 
-
-                JP = reqs[jp]
+                JP = requests[jp]
                 ##            if (min(J.lt,JP.lt) < max(J.et,JP.et)): continue #their window doesn't intersect
 
                 ETIM = min(J.et, JP.et)
@@ -135,11 +113,9 @@ class Solver(object):
                     cost += Distance(J2.des, J1.des)
                     if Curtim <= J1.lt:
                         prevCost = cost
-                        RV.add_edge(j,jp,weight=prevCost)
-                        ##                print("HERE")
+                        RV.add_edge(j, jp,weight=prevCost)
                         continue
 
-                ##        print(Curtim, J1.lt)
                 # J1 - J2 - J1 - J2
                 cost = 0
                 Curtim = ETIM
@@ -151,10 +127,9 @@ class Solver(object):
                     Curtim = Curtim + Distance(J1.des, J2.des)
                     cost += Distance(J1.des, J2.des)
                     if Curtim <= J2.lt and cost <= prevCost:
-                        RV.add_edge(j,jp,weight=cost)
-                        ##                print("HERE")
+                        RV.add_edge(j, jp, weight=cost)
                         continue
-                ##        print(Curtim, J2.lt)
+
                 # J1 - J1 - J2 - J2
                 cost = 0
                 Curtim = ETIM
@@ -166,33 +141,10 @@ class Solver(object):
                     Curtim = Curtim + Distance(J2.ori, J2.des)
                     cost += Distance(J2.ori, J2.des)
                     if Curtim <= J2.lt and cost <= prevCost:
-                        RV.add_edge(j,jp,weight=cost)
-                        ##                print("HERE")
+                        RV.add_edge(j, jp, weight=cost)
                         continue
-                ##        print(Curtim, J2.lt)
 
-
-
-                ##            VirtualDriver = Driver(J.ori, J.des, ETIM, LTIM, 2)
-                ##            bol, cost, pvRT = travel(VirtualDriver, [J,JP])
-                ##            if bol == True:
-                ##                RV.add_edge(j,jp,weight=cost)
-                ##            else:
-                ##                VirtualDriver = Driver(J.ori, JP.des, ETIM, LTIM, 2)
-                ##                bol, cost, pvRT  = travel(VirtualDriver, [J,JP])
-                ##                if bol == True:
-                ##                    RV.add_edge(j,jp,weight=cost)
-                ##
-                ##
-                ##            VirtualDriver = Driver(JP.ori, JP.des, ETIM, LTIM, 2)
-                ##            bol, cost, pvRT  = travel(VirtualDriver, [J,JP])
-                ##            if bol == True:
-                ##                RV.add_edge(j,jp,weight=cost)
-                ##            else:
-                ##                VirtualDriver = Driver(JP.ori, J.des, ETIM, LTIM, 2)
-                ##                bol, cost, pvRT  = travel(VirtualDriver, [J,JP])
-                ##                if bol == True:
-                ##                    RV.add_edge(j,jp,weight=cost)
+                # TODO: how do we describe this segment?
                 prevCost = float('inf')
                 cost = 0
                 Curtim = ETIM
@@ -206,9 +158,9 @@ class Solver(object):
                     if Curtim <= J1.lt:
                         prevCost = cost
                         RV.add_edge(j,jp,weight=prevCost)
-                        ##                print("HERE")
                         continue
 
+            # What is this?
             for i in range(D):
                 d = drivers[i]
                 if self.params.RVPRUN == 1:
@@ -227,22 +179,25 @@ class Solver(object):
                             -min(d.cdev,J.cdev*d.rho)*abs(J.pt-d.pt-Distance(d.ori,J.ori))< -1e-5: #driver cannot be IR
                         continue
 
-                if self.params.TIMEMUTE >=2: print('   ---- before travel', time.clock()-BEGINTIME)
-                bol,cost,route = travel(drivers[i],[J],RHO=self.params.RHO)
-                if self.params.TIMEMUTE >=2: print('\t',bol,cost,route,i,j)
-                if self.params.TIMEMUTE >=2: print('   ---- after travel', time.clock()-BEGINTIME)
+                if self.params.TIMEMUTE >=2:
+                    print('   ---- before travel', time.clock()-BEGINTIME)
+                bol, cost, route = travel(drivers[i],[J], RHO=self.params.RHO)
+                if self.params.TIMEMUTE >=2:
+                    print('\t', bol, cost, route, i, j)
+                if self.params.TIMEMUTE >=2:
+                    print('   ---- after travel', time.clock()-BEGINTIME)
                 ##            if TIMEMUTE !=0: print('\tbefore travel MILP', time.clock()-BEGINTIME)
                 ##            bol2,cost2,route2 = travelMILP(drivers[i],[J])
                 ##            if TIMEMUTE !=0: print('\tafter travel MILP', time.clock()-BEGINTIME)
                 ##            print('\t',bol,bol2,cost,cost2)
                 if bol == True:
-                    FeasibleMat[i][j] = 1
+                    feasibleMat[i][j] = 1
                     RV.add_edge('d'+str(i), j, weight=cost)
                     COST[i][tuple({j})] = cost
                     for schInd in range(len(route)):
                         if route[schInd][0] == 'd':
                             continue
-                        route[schInd] = (j,route[schInd][1])
+                        route[schInd] = (j, route[schInd][1])
                     SCHEDULE[i][tuple({j})] = route
         ##                print(i,j)
         ##                print(cost)
@@ -262,10 +217,10 @@ class Solver(object):
         ##                RV.add_edge('d'+str(i), j, weight=cost)
         ##                COST[i][tuple({j})] = cost
 
-
-
-        if self.params.MUTE != 0: print(FeasibleMat)
-        if self.params.TIMEMUTE >=1: print("Finished RV Time: %f" %(time.clock()-BEGINTIME))
+        if self.params.MUTE != 0:
+            print(feasibleMat)
+        if self.params.TIMEMUTE >=1:
+            print("Finished RV Time: %f" %(time.clock()-BEGINTIME))
         ##    print(FeasibleMat)
 
         ######################################################333#############################
@@ -274,11 +229,11 @@ class Solver(object):
         SimilarD = {}
         for d1 in range(D):
             for d2 in range(d1):
-                if d1==d2: continue
+                if d1 == d2: continue
                 D1 = drivers[d1]
                 D2 = drivers[d2]
 
-                if Distance(D1.ori,D2.ori) <= DEPSILON and Distance(D1.des,D2.des) <=DEPSILON:
+                if Distance(D1.ori, D2.ori) <= DEPSILON and Distance(D1.des, D2.des) <= DEPSILON:
                     if d2 in SimilarD:
                         SimilarD[d2].add(d1)
                     else:
@@ -328,13 +283,13 @@ class Solver(object):
                                                                   RV,
                                                                   SCHEDULE,
                                                                   drivers,
-                                                                  reqs)
+                                                                  requests)
 
 
         # TRIP OF SIZE 2 to R
         self.constructRTV2toR(BEGINTIME, COST, COUNT, D, R, RTV, SCHEDULE,
                               SimilarD, TripCosts, Trips, drivers, feaReqs,
-                              reqs)
+                              requests)
         ############# End extracted portion ############
 
 
@@ -345,7 +300,8 @@ class Solver(object):
             dIndex = 'd'+str(i)
             RTV.add_edge('EMPTY'+str(i), dIndex)
             COST[i]['EMPTY'+str(i)] = drivers[i].cdet*Distance(drivers[i].ori, drivers[i].des)
-            SCHEDULE[i]['EMPTY'+str(i)] = [('d',drivers[i].pt),('d',drivers[i].pt+Distance(drivers[i].ori, drivers[i].des))]
+            SCHEDULE[i]['EMPTY'+str(i)] = [('d',drivers[i].pt),
+                                           ('d',drivers[i].pt+Distance(drivers[i].ori, drivers[i].des))]
             ##        COST[i]['EMPTY'+str(i)] = 0 # By convension we only care about detour and deviation cost
 
         print('================COST==============')
@@ -1014,18 +970,15 @@ class Solver(object):
         for i in range(D):
             objSW += AUD[i]
             objEff += BUD[i]
-            # CK: print('Utility of ', i,': ',BUD[i],"  ", AUD[i])
         for j in range(R):
             objSW += UR[j]
             objEff += UR[j]
-            # CK: print('Utility of ',j,': ',UR[j])
-        # CK: print("\n\TIME: %f" %(ENDTIME - BEGINTIME))
 
         # CK change: return value (1.0 or 0.0) instead of gurobi variable
         for z in x:
             for k, v in z.items():
                 z[k] = v.getAttr('X')
-        return m,x,objSW,objEff,ENDTIME-BEGINTIME
+        return m, x, objSW, objEff, ENDTIME-BEGINTIME
 
 
 if __name__ == '__main__':
@@ -1037,17 +990,20 @@ if __name__ == '__main__':
     print('Generating data...')
     drivers, requests = generator.generate()
 
-    solver = Solver()
-    solver.setData(drivers, requests)
-    solver.preprocess()
+    print('Creating ridesharing problem...')
+    problem = RidesharingProblem()
+    problem.setData(drivers, requests)
+
+    print('Preprocessing ridesharing problem...')
+    problem.preprocess()
 
     print('====================')
     print('Costs per driver')
-    for j in solver.COST:
+    for j in problem.COST:
         print(j)
     print('====================')
 
-    m, x, objSW, objEff, time = solver.solve()
+    m, x, objSW, objEff, time = problem.solve()
     print(m.getAttr('x'))
     for i in range(40):
         print(x[i])
