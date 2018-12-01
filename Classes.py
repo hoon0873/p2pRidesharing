@@ -10,7 +10,6 @@ class Driver:
         self.cdev = cdev
         self.cdet = cdet
         self.val = val
-##        self.window = range(etime,ltime)
         self.cap = cap
         self.rho = rho
         self.maxDev = maxDev
@@ -30,15 +29,10 @@ class Passenger:
         self.val = val
         self.lamb = lamb
         self.maxDev = maxDev
-##        self.window = range(etime,ltime)
     def __str__(self):
         return "Origin: "+str(self.ori)+"\nDestin: "+str(self.des)+"\nWindow: "+str([self.et,self.lt,self.pt])+'\n'\
                "cdev: "+str(self.cdev)+" cdet: "+str(self.cdet)+" val: "+str(self.val)+" lambda: "+str(self.lamb)+'\n'
         
-    def DIST(self):
-        if int(abs(self.ori - self.des))==0: return 1
-        else: return Distance(i.ori,i.des)
-
 class Matching:
     def __init__(self, ):
         pass
