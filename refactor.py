@@ -7,7 +7,7 @@ from NewFeasibleBruthWTime import travel
 from NewFeasibleBruth import Distance
 from types import SimpleNamespace
 import logging
-from Classes import Matching
+import scipy.sparse
 
 DEFAULT_PARAMS = SimpleNamespace()
 DEFAULT_PARAMS.LAMBDA = 1
@@ -964,8 +964,10 @@ class RidesharingProblem(object):
             objSW += UR[j]
             objEff += UR[j]
 
-        # CK change: change from dictionary of lists into set of points
+        # CK change: change from list of dictionaries into list of sets
         matchingListOfSets = self.convertToListOfSets(x)
+
+        # Now convert to a matching proper
         matching = Matching(matchingListOfSets, nRequests=len(self.requests))
 
         return matching, objSW, objEff, ENDTIME-BEGINTIME
@@ -982,6 +984,61 @@ class RidesharingProblem(object):
                     elem = k
                 ret[idx].add(elem)
         return ret
+
+
+class Matching(object):
+    def __init__(self, arrSet, nRequests=None):
+        """
+        :param arrSet: Array (one element per driver) of sets (containing indices of passengers)
+        """
+        self.arrSet = arrSet
+        self.nDrivers = len(self.arrSet)
+        if nRequests is None:
+            nRequests = self.getMaxRiderID(arrSet)
+        self.nRequests = nRequests
+
+        self.M = self.convertToMatrix(self.arrSet)
+        if self.checkIfOverlap(self.M):
+            raise Exception('Some rider is being matched to more than one driver!%s'%self.M)
+
+    def convertToMatrix(self, arrSet):
+        """
+        Convert array of sets to sparse binary driver-rider matrix
+        :return: M, a sparse binary matrix
+        """
+        sp = scipy.sparse.dok_matrix((self.nDrivers, self.nRequests), dtype=np.int)
+        for d_id, d in enumerate(arrSet):
+            for k in d:
+                for r in k:
+                    print(d_id, r)
+                    sp[d_id, r] = 1
+        return sp
+
+    def checkIfOverlap(self, M):
+        """
+        :param M: sparse matrix driver-rider matrices
+        :return: True if some rider is matched to more than one matrix
+        """
+        return np.any(M.sum(axis=0) > 1)
+
+    def getMaxRiderID(self, arrSet):
+        """
+        Try to infer maximum rider ID from the keys in elemnts of arrSet.
+        May not be accurate when there are riders which are not in the keys
+        :param arrSet:
+        :return: inferred highest id of rider
+        """
+        ret = -1
+        for d in arrSet:
+            for k in d:
+                if len(k) <= 0:
+                    continue
+                ret = max(ret, max(k))
+        return ret
+
+    def __str__(self):
+        return str(self.arrSet)
+
 
 if __name__ == '__main__':
     from generate import DataGenerator
