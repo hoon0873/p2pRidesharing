@@ -8,8 +8,6 @@ import gurobi as grb
 from refactor import RidesharingProblem
 from copy import deepcopy
 import random
-import matplotlib as mpl
-import matplotlib.pyplot as plt
 
 EPSILON = 10.**-10
 
@@ -246,7 +244,7 @@ class RandomizedPolicy(object):
         for j in modified_cost:
             print(j)
 
-        temp_ret,x,_,_,_ = self.problem.solve(modified_cost)
+        x,_,_,_ = self.problem.solve(modified_cost)
         return x
 
     def adaptMatching(self, matching_dictionary):

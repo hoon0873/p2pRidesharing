@@ -7,6 +7,7 @@ from NewFeasibleBruthWTime import travel
 from NewFeasibleBruth import Distance
 from types import SimpleNamespace
 import logging
+from Classes import Matching
 
 DEFAULT_PARAMS = SimpleNamespace()
 DEFAULT_PARAMS.LAMBDA = 1
@@ -851,7 +852,7 @@ class RidesharingProblem(object):
 
     def solve(self, COST=None):
         '''
-        :param COST: (optional) modified costs. By default we will use those used in the precomputation
+        :param COST: (optional) modified costs. By default we will use those used in the preprocess step.
         :return:
         '''
         # Set aliases
@@ -963,18 +964,30 @@ class RidesharingProblem(object):
             objSW += UR[j]
             objEff += UR[j]
 
-        # CK change: return value (1.0 or 0.0) instead of gurobi variable
-        for z in x:
-            for k, v in z.items():
-                z[k] = v.getAttr('X')
-        return m, x, objSW, objEff, ENDTIME-BEGINTIME
+        # CK change: change from dictionary of lists into set of points
+        matchingListOfSets = self.convertToListOfSets(x)
+        matching = Matching(matchingListOfSets, nRequests=len(self.requests))
 
+        return matching, objSW, objEff, ENDTIME-BEGINTIME
+
+    def convertToListOfSets(self, x):
+        ret = [None] * len(x)
+        for idx, z in enumerate(x):
+            ret[idx] = set()
+            for k, v in z.items():
+                if v.getAttr('X') <= 0.: continue
+                if k[0] == 'E':
+                    elem = ()
+                else:
+                    elem = k
+                ret[idx].add(elem)
+        return ret
 
 if __name__ == '__main__':
     from generate import DataGenerator
 
-    generator = DataGenerator(n=10, DD=40, PRECISION=100, CAP=4, rhoo=1.2)
-
+    nRequests, nDrivers = 10, 40
+    generator = DataGenerator(n=nRequests, DD=nDrivers, PRECISION=100, CAP=4, rhoo=1.2)
 
     print('Generating data...')
     drivers, requests = generator.generate()
@@ -992,8 +1005,8 @@ if __name__ == '__main__':
         print(j)
     print('====================')
 
-    m, x, objSW, objEff, time = problem.solve()
-    print(m.getAttr('x'))
-    for i in range(40):
-        print(x[i])
+    matching, objSW, objEff, time = problem.solve()
+    print('matching')
+    print(matching)
+    print('social welfare')
     print(objSW)

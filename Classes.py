@@ -41,7 +41,7 @@ class Passenger(object):
 class Matching(object):
     def __init__(self, arrSet, nRequests=None):
         """
-        :param arrSet: Array (one element per driver) or sets (containing indices of passengers)
+        :param arrSet: Array (one element per driver) of sets (containing indices of passengers)
         """
         self.arrSet = arrSet
         self.nDrivers = len(self.arrSet)
@@ -59,12 +59,11 @@ class Matching(object):
         :return: M, a sparse binary matrix
         """
         sp = scipy.sparse.dok_matrix((self.nDrivers, self.nRequests), dtype=np.int)
-        for d in arrSet:
-            for k, v in d.items():
-                if v <= 0:
-                    continue
+        for d_id, d in enumerate(arrSet):
+            for k in d:
                 for r in k:
-                    sp[d, r] = 1
+                    print(d_id, r)
+                    sp[d_id, r] = 1
         return sp
 
     def checkIfOverlap(self, M):
@@ -72,7 +71,7 @@ class Matching(object):
         :param M: sparse matrix driver-rider matrices
         :return: True if some rider is matched to more than one matrix
         """
-        return np.all(M.sum(axis=0) <= 1)
+        return np.any(M.sum(axis=0) > 1)
 
     def getMaxRiderID(self, arrSet):
         """
@@ -83,10 +82,11 @@ class Matching(object):
         """
         ret = -1
         for d in arrSet:
-            for k, _ in d.items():
+            for k in d:
+                if len(k) <= 0:
+                    continue
                 ret = max(ret, max(k))
         return ret
 
-
     def __str__(self):
-        pass
+        return str(self.arrSet)
