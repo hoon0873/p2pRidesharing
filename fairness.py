@@ -5,12 +5,13 @@ assume that item_sizes are integers
 
 import numpy as np
 import gurobi as grb
-from refactor import RidesharingProblem
+from refactor import RidesharingProblem, Matching
 from copy import deepcopy
 import random
+import logging
 
 EPSILON = 10.**-10
-
+logger = logging.getLogger('RandomizedPolicy')
 
 class RandomizedPolicy(object):
 
@@ -25,46 +26,35 @@ class RandomizedPolicy(object):
     def preprocess(self):
         self.problem.preprocess()
 
-    def matchingToVector(self, matching):
-        """ Adapter converting a list of dictionaries to a list of binary vectors """
-
     def solve(self, theta=None):
         """
         :param theta: threshold probability for each rider
         :return:
         """
 
+        # Initialize aliases
         nDrivers, nRequests = len(self.drivers), len(self.requests)
-        self.checkSolutionExists()
-
-        model = grb.Model("master")
-        model.setParam('OutputFlag', 1)
         costs, rtv, schedules = self.problem.COST, self.problem.RTV, self.problem.SCHEDULE
+        self.checkSolutionExists() # TODO: check if there exists a solution.
 
+        # Construct model.
+        model = grb.Model("master")
+        model.setParam('OutputFlag', 1) # Suppress output from gurobi
+
+        # Set theta to be a conservative value of it was not passed
         if theta is None:
-            theta = [1./nRequests] * nRequests # TODO: refactor, change to something less conservative
+            theta = [1./nRequests] * nRequests # TODO: change to something less conservative?
+
+        # Remove theta's which cause problem to be infeasible
         theta = self.preprocessTheta(theta, nRequests, schedules)
 
         # Initialize set of basic matchings #
-        # CK: hacky preprocessing to include at least one matching per rider
-        # We want *a* feasible solution.
-        # To achieve this, we add in, for each rider with positive theta, some matching containing it.
-        # In the following, we greedily add matchings, each with just single driver matched to some rider r
-        # NOTE: this does *not* guarantee a feasible solution unless theta is sufficiently small
-        minimal_raw_matchings = self.getFeasibleBasis(nRequests, nDrivers, schedules, theta)
-        """
-        print(minimal_raw_matchings)
-        for j in minimal_raw_matchings:
-            print(j)
-        assert False
-        """
-        matchings = [] # contains full matching info. #TODO refactor to class
+        minimal_matchings = self.getFeasibleBasis(nRequests, nDrivers, schedules, theta)
+        matchings = [] # contains full matching info.
         matching_costs = []
-        matching_riders = []
-        for raw_matching in minimal_raw_matchings:
-            riders_bin_vector, drivers_riders_bin_matrix, riders, cost = self.adaptMatching(raw_matching)
-            matchings.append((riders_bin_vector, drivers_riders_bin_matrix, riders, cost))
-            matching_riders.append(riders)
+        for matching in minimal_matchings:
+            cost = self.computeMatchingCost(matching)
+            matchings.append(matching)
             matching_costs.append(cost)
 
         # Generate sum-to-one constraints
@@ -83,27 +73,25 @@ class RandomizedPolicy(object):
 
         # Generate variables (non-negative constraints and through columns)
         var_list = []
-        for idx in range(len(matching_riders)):
-            temp_col = grb.Column(coeffs=[1.0]*(len(matching_riders[idx])+1),
-                                  constrs=[constr_rider_list[k] for k in matching_riders[idx]] + [constr_sum_to_one])
+        for idx in range(len(matchings)):
+            matching, cost = matchings[idx], matching_costs[idx]
+            temp_col = grb.Column(coeffs=[1.0]*(len(matching.riderSet)+1), # One additional constraint for probability simplex
+                                  constrs=[constr_rider_list[k] for k in matching.riderSet] + [constr_sum_to_one])
             var_list.append(model.addVar(vtype='C',
                                          name='matching%d' % len(var_list),
-                                         # name='pattern: ' + str(p),
-                                         obj=matching_costs[idx],
+                                         obj=cost,
                                          lb=0.,
                                          column=temp_col))
 
         objective_history = []
-        riders_history = []
         solution_vectors = []
 
         iter_num = 0
         while True:
-            # Solve SmallPrimal
+            # Solve primal solution with limited columns
             model.optimize()
             objective_history.append(model.getAttr('ObjVal'))
             solution_vectors.append(model.getAttr('X'))
-            # print_feedback(m, constr_list, num_items)
 
             # Save primal and dual variables
             """
@@ -114,38 +102,27 @@ class RandomizedPolicy(object):
             """
 
             # Get a new, better matching by solving subproblem
-            # duals = model.getAttr('pi')[1:]
             duals = [constr_rider_list[i].getAttr('Pi') for i in range(nRequests)]
-            raw_matching = self.getImprovedMatching(duals)
-            riders_bin_vector, drivers_riders_bin_matrix, riders, cost = self.adaptMatching(raw_matching)
-            if riders in riders_history:
-                print('Termination criterion met')
-                if iter_num > 5: break
-                print('But iter num too low %d' % iter_num)
-            matchings.append((riders_bin_vector, drivers_riders_bin_matrix, riders, cost))
-            matching_riders.append(riders)
+            new_matching = self.getImprovedMatching(duals)
+            if new_matching in matchings:
+                logger.info('Termination criterion met.')
+                if iter_num > 5:
+                    break
+                logger.info('But iter num too low %d' % iter_num)
+            matchings.append(new_matching)
+
+            cost = self.computeMatchingCost(new_matching)
             matching_costs.append(cost)
 
-            riders_history.append(riders)
-
             # Add column
-            temp_col = grb.Column(coeffs=[1.0]*(len(matching_riders[-1])+1),
-                                  constrs=[constr_rider_list[k] for k in matching_riders[-1]] + [constr_sum_to_one])
+            temp_col = grb.Column(coeffs=[1.0]*(len(matchings[-1].riderSet)+1),
+                                  constrs=[constr_rider_list[k] for k in matchings[-1].riderSet] + [constr_sum_to_one])
             var_list.append(model.addVar(vtype='C',
                                          name='matching%d' % len(var_list),
                                          # name='pattern: ' + str(p),
                                          obj=matching_costs[-1],
                                          lb=0.,
                                          column=temp_col))
-            """
-            temp_col = grb.Column(coeffs=[1.0]*sum(new_col),
-                                  constrs=[constr_list[i] for i in range(num_items) if new_col[i]==1])
-            var_list.append(model.addVar(vtype='C',
-                                         name='pattern%d' % len(var_list),
-                                         obj=1.,
-                                         lb=0.,
-                                         column=temp_col))
-            """
 
             """
             # Does not seeem to help, or warm start already usd
@@ -168,35 +145,41 @@ class RandomizedPolicy(object):
             """
 
             iter_num += 1
-            print('iteration: %d'%iter_num)
+            logger.info('iteration: %d'%iter_num)
             if iter_num > 1000: break
 
+        """
         print('obj_hist')
         print(objective_history)
         print('riders hist')
-        for j in riders_history:
+        for j in matchings:
             print(j)
         print('matching_costs')
         print(matching_costs)
 
         print('Extracting solutions')
+        """
         final_objective = objective_history[-1]
         final_solution = solution_vectors[-1]
-        final_costs = matching_costs[-1]
-        final_matchings = matching_riders
+        final_costs = matching_costs
+        final_matchings = matchings
 
         return final_objective, final_solution, final_costs, final_matchings
 
-    def preprocessTheta(self, THETA_DEFAULT, nRequests, schedules):
-        # Change theta for infeasible riders to be 0
+    def preprocessTheta(self, theta, nRequests, schedules):
+        """
+        Change theta for infeasible riders to be 0
+        :param theta: input theta
+        :param nRequests:
+        :param schedules: preprocessed schedules.
+        :return: theta - modified list of theta
+        """
         # TODO: hoon says we should look at RV graph. Nothing works.
-        theta = deepcopy(THETA_DEFAULT)
-        print(theta)
-        # theta = [THETA_DEFAULT] * nRequests
+        theta = deepcopy(theta)
         feasible_riders = [False] * nRequests
         for s in schedules:
             for k, v in s.items():  # keys contain id's (tuple of integers) of riders
-                if k[0] == 'E': continue # TODO: change this hacky logic...
+                if len(k) == 0: continue # Empty set
                 for j in k:
                     feasible_riders[j] = True
         # Set thetas of infeasible riders to 0.
@@ -207,91 +190,65 @@ class RandomizedPolicy(object):
 
     def getFeasibleBasis(self, nRequests, nDrivers, schedules, theta):
         """
-        TODO: CHANGE THIS WEIRD DEFINITION OF A MATCHING.
+        Hacky preprocessing to include at least one matching per rider. We want *a* feasible solution.
+        To achieve this, we add in, for each rider with positive theta, some matching containing it.
+        In the following, we greedily add matchings (per rider),
+        each with just single driver matched to some rider r.
+
+        NOTE: this does *not* guarantee a feasible solution unless theta is sufficiently small
+        :return list of matching objects.
         """
         satisfied = [False if theta[r] > 0. else True for r in range(nRequests)]
         minimal_matchings = []
         # TODO: Hoon says we should look at RV graph instead
         for s_id, s in enumerate(schedules):
             for k, v in s.items():  # keys contain id's (tuple of integers) of riders
-                if k[0] == 'E': continue  # TODO: change this hacky logic...
+                if len(k) == 0: continue  # empty set
                 if len(k) == 1 and not satisfied[k[0]]:
                     satisfied[k[0]] = True
 
-                    """ Create a raw matching"""
-                    mm = [{'EMPTY%d'%i : 1.} for i in range(nDrivers)]
-                    mm[s_id] = {(k[0],) : 1.}
+                    """ Create a matching and store it """
+                    mm = [set() for i in range(nDrivers)]
+                    mm[s_id] = set([k[0]])
+                    mm = Matching(mm, nRequests)
                     minimal_matchings.append(mm)
+
         if not all(satisfied):
             raise Exception('Expected to have a basis which covers all riders!')
         return minimal_matchings
 
     def getImprovedMatching(self, duals):
-
+        """
+        Compute an improved matching for column generation
+        :param duals: vector containing dual variables.
+        :return: a Matching object containing the proposed matching
+        """
         # Create a modified version of the matching problem
         modified_cost = deepcopy(self.problem.COST)
-        print('duals')
-        print(duals)
         for d in modified_cost:
             for s, c in d.items():
                 x = c
-                if s[0] == 'E': continue
+                if len(s) == 0: continue
                 for rider in s:
                     x -= duals[rider]
                 d[s] = x
 
-        print('modified_cost')
-        for j in modified_cost:
-            print(j)
-
-        x,_,_,_ = self.problem.solve(modified_cost)
+        x, _, _, _ = self.problem.solve(modified_cost)
         return x
 
-    def adaptMatching(self, matching_dictionary):
-        '''
-        Converts dictionary format of matching into
-            - a single binary vector (of length nRequests)
-            - a binary form of size nDrivers * nRequests with columns summing to no greater than 1
-            - a list of tuples, each of which contain the riders chosen
-            - cost vector
-        Note that the first quantity is obtained by summing up rows of the second.
-        :param: matching_dictionary
-        :return:
-        '''
-        nRequests, nDrivers = len(self.requests), len(self.drivers)
-        drivers_riders_bin_matrix = [[0 for x in range(nRequests)] for y in range(nDrivers)]
-        riders_bin_vector = [0 for y in range(nRequests)]
-        riders_list = []
+    def computeMatchingCost(self, matching):
+        """
+        :param matching: Matching object
+        :return: float containing the cost of this matching (under default costs)
+        """
         cost = 0.
-        for driver_idx in range(len(matching_dictionary)):
-            if matching_dictionary[driver_idx] is None: continue
-            for sch, isChosen in matching_dictionary[driver_idx].items():
-                if not isChosen: continue
-                if sch[0] == 'E':
-                    if isChosen >= 1.0:
-                        cost += self.problem.COST[driver_idx][sch]
-                    continue
-                if isinstance(isChosen, float) or isinstance(isChosen, int):
-                    if isChosen == 0.: continue
-                else:
-                    if isChosen.getAttr('X') <= 0.: continue
-                for z in sch:
-                    drivers_riders_bin_matrix[driver_idx][z] = 1
-                    riders_bin_vector[z] += 1
-                    riders_list.append(z)
-                cost += self.problem.COST[driver_idx][sch]
+        for driver_idx, driver_req_set in enumerate(matching.arrTuple):
+            cost += self.problem.COST[driver_idx][driver_req_set]
 
-        return tuple(riders_bin_vector), \
-               drivers_riders_bin_matrix, \
-               tuple(riders_list), \
-               cost
-
+        return cost
 
     def checkSolutionExists(self):
         pass
-
-
-
 
 
 if __name__ == '__main__':
@@ -318,51 +275,24 @@ if __name__ == '__main__':
     baseline_theta = 1./ nRequests
     theta_basic = [random.uniform(baseline_theta*0.3, baseline_theta*1) for j in range(nRequests)]
 
-    """
+    # ==== Single theta test === #
     final_objective, final_solution, final_costs, final_matchings = policySolver.solve(theta=theta_basic)
-    print('----')
-    for m in final_matchings: # bin matrix
-        print(m)
-    print('----')
-    print(final_solution)
-    print(final_costs)
-    """
 
+
+    # === Multiple objectives === #
     objectives = []
     # change_idx = 8
     theta_ratios = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.]
     theta_scaled = deepcopy(theta_basic)
     for theta_ratio in theta_ratios:
-        #theta_scaled[change_idx] = theta_basic[change_idx] * theta_ratio
         theta_scaled = [theta_basic[i] * theta_ratio for i in range(len(theta_basic))]
         final_objective, final_solution, final_costs, final_matchings = policySolver.solve(theta = theta_scaled)
         objectives.append(final_objective)
 
     print('objectives:')
     print(objectives)
+
+    print('difference between objectives i and i+1')
     print([objectives[i+1]-objectives[i] for i in range(len(objectives)-1)])
 
 
-    """
-    print(m.getAttr('x'))
-    for i in range(5):
-        print(x[i])
-    print(objSW)
-    """
-
-    """
-    # item_sizes = np.array([4, 8, 1, 4, 2, 1])
-    # bin_size = 10
-    import timeit
-
-    import random
-    random.seed(0)
-    item_sizes = np.array([random.randint(0, 10) for x in range(500)])
-    # item_sizes = np.array([4, 8, 1, 4, 2, 1] * 100)
-    bin_size = 10
-
-    def wrap():
-        main(item_sizes, bin_size)
-
-    print(timeit.timeit(wrap, number=1))
-    """

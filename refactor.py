@@ -289,14 +289,21 @@ class RidesharingProblem(object):
         ## ADD EMPTY SET
         for i in range(D):
             dIndex = 'd'+str(i)
-            RTV.add_edge('EMPTY'+str(i), dIndex)
-            COST[i]['EMPTY'+str(i)] = drivers[i].cdet*Distance(drivers[i].ori, drivers[i].des)
-            SCHEDULE[i]['EMPTY'+str(i)] = [('d',drivers[i].pt),
-                                           ('d',drivers[i].pt+Distance(drivers[i].ori, drivers[i].des))]
-            ##        COST[i]['EMPTY'+str(i)] = 0 # By convension we only care about detour and deviation cost
+
+            # CK removed: we us empty tuples to represent empty choices, not 'EMPTYxx'
+            # key = 'EMPTY'+str(i)
+            key = ()
+
+            RTV.add_edge(key, dIndex)
+            COST[i][key] = drivers[i].cdet*Distance(drivers[i].ori, drivers[i].des)
+            SCHEDULE[i][key] = [('d',drivers[i].pt),
+                                ('d',drivers[i].pt+Distance(drivers[i].ori, drivers[i].des))]
+
+            ##        COST[i]['EMPTY'+str(i)] = 0 # By convention we only care about detour and deviation cost
 
         logger.info('================COST==============')
         logger.info(COST)
+
         self.COST, self.RTV, self.SCHEDULE = COST, RTV, SCHEDULE
 
     def constructRTV2toR(self, BEGINTIME, COST, COUNT, D, R, RTV, SCHEDULE, SimilarD, TripCosts, Trips, drivers,
@@ -859,7 +866,8 @@ class RidesharingProblem(object):
         drivers, reqs = self.drivers, self.requests
         D, R = self.D, self.R
         RTV, SCHEDULE = self.RTV, self.SCHEDULE
-        if COST is None: COST = self.COST
+        if COST is None:
+            COST = self.COST
 
         if not self.preprocessed:
             raise Exception('Have not preprocessed cost matrix!')
@@ -978,11 +986,8 @@ class RidesharingProblem(object):
             ret[idx] = set()
             for k, v in z.items():
                 if v.getAttr('X') <= 0.: continue
-                if k[0] == 'E':
-                    elem = ()
-                else:
-                    elem = k
-                ret[idx].add(elem)
+                for w in k:
+                    ret[idx].add(w)
         return ret
 
 
@@ -991,15 +996,31 @@ class Matching(object):
         """
         :param arrSet: Array (one element per driver) of sets (containing indices of passengers)
         """
-        self.arrSet = arrSet
+        self.arrSet = arrSet # list of sets (possibly empty)
+        self.arrTuple = [tuple(sorted(list(x))) for x in arrSet]
         self.nDrivers = len(self.arrSet)
         if nRequests is None:
             nRequests = self.getMaxRiderID(arrSet)
         self.nRequests = nRequests
 
-        self.M = self.convertToMatrix(self.arrSet)
-        if self.checkIfOverlap(self.M):
+        self.M = self.convertToMatrix(self.arrSet) # binary driver-rider matrix
+        self.m = self.M.sum(axis=0) # binary rider (1 if served) vector
+        self.riderSet = tuple(sorted(list(set.union(*arrSet)))) # set of all riders served
+        if self.checkIfOverlap():
             raise Exception('Some rider is being matched to more than one driver!%s'%self.M)
+
+    def __eq__(self, other):
+        """
+        Comparison operator. We just check if arrSeet is equal.
+        :param other:
+        :return: True if 2 matchings are equal.
+        """
+        if self.nDrivers != other.nDrivers:
+            return False
+        for idx in range(self.nDrivers):
+            if not self.arrSet[idx] == other.arrSet[idx]:
+                return False
+        return True
 
     def convertToMatrix(self, arrSet):
         """
@@ -1008,18 +1029,16 @@ class Matching(object):
         """
         sp = scipy.sparse.dok_matrix((self.nDrivers, self.nRequests), dtype=np.int)
         for d_id, d in enumerate(arrSet):
-            for k in d:
-                for r in k:
-                    print(d_id, r)
-                    sp[d_id, r] = 1
+            for r in d:
+                sp[d_id, r] = 1
         return sp
 
-    def checkIfOverlap(self, M):
+    def checkIfOverlap(self):
         """
         :param M: sparse matrix driver-rider matrices
         :return: True if some rider is matched to more than one matrix
         """
-        return np.any(M.sum(axis=0) > 1)
+        return np.any(self.m > 1)
 
     def getMaxRiderID(self, arrSet):
         """
@@ -1030,10 +1049,7 @@ class Matching(object):
         """
         ret = -1
         for d in arrSet:
-            for k in d:
-                if len(k) <= 0:
-                    continue
-                ret = max(ret, max(k))
+            ret = max(ret, max(d))
         return ret
 
     def __str__(self):
