@@ -1,16 +1,15 @@
 '''
-Solve LP *relaxation* of bin packing problem using column generation
-assume that item_sizes are integers
+Solves randomized matching problem with min. constraints for each rider to be fufilled.
+Uses column generation.
 '''
 
 import numpy as np
 import gurobi as grb
-from refactor import RidesharingProblem, Matching
+from ridesharing import RidesharingProblem, Matching
 from copy import deepcopy
 import random
 import logging
 
-EPSILON = 10.**-10
 logger = logging.getLogger('RandomizedPolicy')
 
 class RandomizedPolicy(object):
