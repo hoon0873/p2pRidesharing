@@ -338,7 +338,7 @@ if __name__ == '__main__':
     # nRequests = 100
     # nDrivers = 10
 
-    nRequests = 20
+    nRequests = 10
     nDrivers = 2
 
     seed = 142857

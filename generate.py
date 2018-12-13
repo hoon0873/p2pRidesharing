@@ -66,7 +66,7 @@ class DataGenerator(object):
         RCDET = 3
         MAXDEV = 10
 
-        TTB = 3
+        TTB = 1
         T = TTB*Distance((0,0), (0.7*PRECISION, 0.7*PRECISION))+PRECISION
 
         for i in range(D):
