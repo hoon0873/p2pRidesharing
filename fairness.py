@@ -41,6 +41,7 @@ class RandomizedPolicy(object):
 
         model = grb.Model("master")
         model.setParam('OutputFlag', 1)
+        model.setObjective(grb.GRB.MINIMIZE)
         costs, rtv, schedules = self.solver.COST, self.solver.RTV, self.solver.SCHEDULE
 
         if theta is None:
@@ -207,7 +208,7 @@ class RandomizedPolicy(object):
         if len(objective_history) != 0:
             final_objective = objective_history[-1]
             final_solution = solution_vectors[-1]
-            final_costs = matching_costs[-1]
+            final_costs = matching_costs
             final_matchings = matching_riders
 
         else:
@@ -391,6 +392,9 @@ if __name__ == '__main__':
 
     objectives = []
     resultingTheta = []
+    solutionList = []
+    costList = []
+    matchingList = []
     # change_idx = 8
     theta_ratios = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.]
     theta_scaled = deepcopy(theta_basic)
@@ -400,12 +404,20 @@ if __name__ == '__main__':
         final_objective, final_solution, final_costs, final_matchings = policySolver.solve(theta = theta_scaled)
         resultingTheta.append(theta_scaled)
         objectives.append(final_objective)
-
-    print('objectives:')
+        solutionList.append(final_solution)
+        costList.append(final_costs)
+        matchingList.append(final_matchings)
+    print('Theta:')
     print(resultingTheta)
+    print('objectives:')
     print(objectives)
     print([objectives[i+1]-objectives[i] for i in range(len(objectives)-1)])
-
+    print('solution:')
+    print(solutionList)
+    print('cost:')
+    print(costList)
+    print('matching:')
+    print(matchingList)
 
     """
     print(m.getAttr('x'))

@@ -75,7 +75,7 @@ class DataGenerator(object):
 
 
             dWORK = (int(rd.uniform(0.0,0.1)*PRECISION),int(rd.uniform(0.0,0.1)*PRECISION))
-            dp = 0.4 #0.4
+            dp = 10.4 #0.4
             aWORK = (int(rd.uniform(0.7,1.0)*PRECISION),int(rd.uniform(0.7,1.0)*PRECISION))
             pa = 0.2 #0.2
             bWORK = (int(rd.uniform(0.4,0.7)*PRECISION),int(rd.uniform(0,0.2)*PRECISION))
@@ -189,7 +189,7 @@ class DataGenerator(object):
 
 
             dWORK = (int(rd.uniform(0.0,0.3)*PRECISION),int(rd.uniform(0.0,0.3)*PRECISION))
-            dp = 0.4
+            dp = 10.4
             aWORK = (int(rd.uniform(0.7,1.0)*PRECISION),int(rd.uniform(0.7,1.0)*PRECISION))
             pa = 0.2
             bWORK = (int(rd.uniform(0.4,0.7)*PRECISION),int(rd.uniform(0,0.2)*PRECISION))
