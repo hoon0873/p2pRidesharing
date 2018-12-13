@@ -263,7 +263,8 @@ class Solver(object):
         ##                COST[i][tuple({j})] = cost
 
 
-
+##        print(FeasibleMat)
+##        time.sleep(5)
         if self.params.MUTE != 0: print(FeasibleMat)
         if self.params.TIMEMUTE >=1: print("Finished RV Time: %f" %(time.clock()-BEGINTIME))
         ##    print(FeasibleMat)

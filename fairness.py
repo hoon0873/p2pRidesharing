@@ -4,7 +4,7 @@ assume that item_sizes are integers
 '''
 
 import numpy as np
-import gurobi as grb
+import gurobipy as grb
 from refactor import Solver
 from copy import deepcopy
 import random
@@ -57,6 +57,10 @@ class RandomizedPolicy(object):
         # In the following, we greedily add matchings, each with just single driver matched to some rider r
         # NOTE: this does *not* guarantee a feasible solution unless theta is sufficiently small
         minimal_raw_matchings = self.getFeasibleBasis(nRequests, nDrivers, schedules, theta)
+
+        # add random matchings
+        for ct in range(50):
+            minimal_raw_matchings.append(self.getRandomMatching(nRequests,nDrivers,schedules,theta,rtv))
         """
         print(minimal_raw_matchings)
         for j in minimal_raw_matchings:
@@ -221,6 +225,7 @@ class RandomizedPolicy(object):
         satisfied = [False if theta[r] > 0. else True for r in range(nRequests)]
         minimal_matchings = []
         # TODO: Hoon says we should look at RV graph instead
+        print(schedules)
         for s_id, s in enumerate(schedules):
             for k, v in s.items():  # keys contain id's (tuple of integers) of riders
                 if k[0] == 'E': continue  # TODO: change this hacky logic...
@@ -234,6 +239,30 @@ class RandomizedPolicy(object):
         if not all(satisfied):
             raise Exception('Expected to have a basis which covers all riders!')
         return minimal_matchings
+
+    def getRandomMatching(self, nRequests, nDrivers, schedules, theta, rtv):
+        dOrder = ['d'+str(i) for i in range(nDrivers)]
+        random.shuffle(dOrder)
+
+        riderTaken = set()
+
+        mm = [{'EMPTY%d'%i: 1.} for i in range(nDrivers)]
+
+        for d in dOrder:
+            N = rtv.in_degree(d)
+            while True:
+                S = random.choice(list(rtv.predecessors(d)))
+                if S[0] == 'E': setS = set()
+                else: setS = set(S)
+
+                if setS - riderTaken == setS: break
+                
+            mm[int(d[1])] = {S:1.}
+            for j in S: riderTaken.add(j)
+            
+##        print(mm)
+        return mm
+                
 
     def getImprovedMatching(self, duals):
 
@@ -309,8 +338,8 @@ if __name__ == '__main__':
     # nRequests = 100
     # nDrivers = 10
 
-    nRequests = 100
-    nDrivers = 10
+    nRequests = 20
+    nDrivers = 2
 
     seed = 142857
     print('Generating data using seed %d...'%seed)
@@ -324,8 +353,10 @@ if __name__ == '__main__':
     print(policySolver.solver.RTV)
 
     random.seed(seed)
-    baseline_theta = 1./ nRequests
-    theta_basic = [random.uniform(baseline_theta*0.3, baseline_theta*1) for j in range(nRequests)]
+##    baseline_theta = 1./ nRequests
+    baseline_theta = 1.-0.1 # SET THIS TO MAX THETA
+##    theta_basic = [random.uniform(baseline_theta*0.3, baseline_theta*1) for j in range(nRequests)]
+    theta_basic = [baseline_theta for j in range(nRequests)]
 
     """
     final_objective, final_solution, final_costs, final_matchings = policySolver.solve(theta=theta_basic)
@@ -338,6 +369,7 @@ if __name__ == '__main__':
     """
 
     objectives = []
+    resultingTheta = []
     # change_idx = 8
     theta_ratios = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.]
     theta_scaled = deepcopy(theta_basic)
@@ -345,9 +377,11 @@ if __name__ == '__main__':
         #theta_scaled[change_idx] = theta_basic[change_idx] * theta_ratio
         theta_scaled = [theta_basic[i] * theta_ratio for i in range(len(theta_basic))]
         final_objective, final_solution, final_costs, final_matchings = policySolver.solve(theta = theta_scaled)
+        resultingTheta.append(theta_scaled)
         objectives.append(final_objective)
 
     print('objectives:')
+    print(resultingTheta)
     print(objectives)
     print([objectives[i+1]-objectives[i] for i in range(len(objectives)-1)])
 

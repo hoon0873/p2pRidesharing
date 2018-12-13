@@ -66,19 +66,22 @@ class DataGenerator(object):
         RCDET = 3
         MAXDEV = 10
 
+        TTB = 3
+        T = TTB*Distance((0,0), (0.7*PRECISION, 0.7*PRECISION))+PRECISION
+
         for i in range(D):
             NEIGHBORHOOD = (int(rd.uniform(0.45,0.55)*PRECISION),int(rd.uniform(0.45,0.55)*PRECISION))
             ori = NEIGHBORHOOD
 
 
             dWORK = (int(rd.uniform(0.0,0.1)*PRECISION),int(rd.uniform(0.0,0.1)*PRECISION))
-            dp = 0.4
+            dp = 1.0 #0.4
             aWORK = (int(rd.uniform(0.7,1.0)*PRECISION),int(rd.uniform(0.7,1.0)*PRECISION))
-            pa = 0.2
+            pa = 0 #0.2
             bWORK = (int(rd.uniform(0.4,0.7)*PRECISION),int(rd.uniform(0,0.2)*PRECISION))
-            pb = 0.1
+            pb = 0 #0.1
             cWORK = (int(rd.uniform(0.2,0.5)*PRECISION),int(rd.uniform(0.6,0.9)*PRECISION))
-            pc = 0.2
+            pc = 0 #0.2
 
             # TODO: use random.choice instead
             # TODO: refactor please
@@ -89,7 +92,7 @@ class DataGenerator(object):
 
                 tim = int(rd.uniform(0,max(T//10,1))) # EARLY WINDOW
                 delta = int(rd.uniform(0,0.5)*PRECISION)
-                etim = min(max(T//10,1)+Distance(ori,des),T-1) #STRICT WINDOW
+                etim = min(max(T//10,1)+TTB*Distance(ori,des),T-1) #STRICT WINDOW
                 ptim = max(T//10,1) #STRICT PTIME
 
                 # ADDED BY CK FOR SANITY
@@ -109,7 +112,7 @@ class DataGenerator(object):
                 tim = int(rd.uniform(0,max(T//6,1))) # EARLYISH WINDOW
                 delta = int(rd.uniform(0,0.5)*PRECISION)
 
-                etim = min(max(T//6,1)+Distance(ori,des),T-1) #STRICT WINDOW
+                etim = min(max(T//6,1)+TTB*Distance(ori,des),T-1) #STRICT WINDOW
                 ptim = tim+delta//2 #less strict PTIME
 
                 # ADDED BY CK FOR SANITY
@@ -129,7 +132,7 @@ class DataGenerator(object):
                 tim = int(rd.uniform(0,max(T//3,1))) # EARLYISH WINDOW
                 ##            delta = int(rd.uniform(0,1)*PRECISION)
                 delta = int(rd.gauss(0.5,1)*PRECISION)
-                etim = min(tim+delta+Distance(ori,des),T-1) #MORE FLEXIBLE WINDOW
+                etim = min(tim+delta+TTB*Distance(ori,des),T-1) #MORE FLEXIBLE WINDOW
                 ptim = tim+delta//2 #less strict PTIME
                 cdev = DCDEV
                 cdet = DCDET
@@ -143,7 +146,7 @@ class DataGenerator(object):
 
                 tim = int(rd.uniform(0,max(T/2-2-Distance(ori,des),1)))
                 delta = int(rd.uniform(0,1)*PRECISION)
-                etim = min(tim+delta+Distance(ori,des),T-1)
+                etim = min(tim+delta+TTB*Distance(ori,des),T-1)
                 ptim = tim+delta//2
                 cdev = DCDEV
                 cdet = DCDET
@@ -157,7 +160,7 @@ class DataGenerator(object):
 
                 tim = int(rd.uniform(0,max(T/2-2-Distance(ori,des),1)))
                 delta = int(rd.uniform(0,1)*PRECISION)
-                etim = min(tim+delta+Distance(ori,des),T-1)
+                etim = min(tim+delta+TTB*Distance(ori,des),T-1)
                 ptim = tim+delta//2
                 cdev = DCDEV
                 cdet = DCDET
@@ -186,13 +189,13 @@ class DataGenerator(object):
 
 
             dWORK = (int(rd.uniform(0.0,0.3)*PRECISION),int(rd.uniform(0.0,0.3)*PRECISION))
-            dp = 0.4
+            dp = 0.5
             aWORK = (int(rd.uniform(0.7,1.0)*PRECISION),int(rd.uniform(0.7,1.0)*PRECISION))
-            pa = 0.2
+            pa = 0.5
             bWORK = (int(rd.uniform(0.4,0.7)*PRECISION),int(rd.uniform(0,0.2)*PRECISION))
-            pb = 0.1
+            pb = 0
             cWORK = (int(rd.uniform(0.3,0.55)*PRECISION),int(rd.uniform(0.3,0.55)*PRECISION))
-            pc = 0.2
+            pc = 0
 
             # TODO: use random.choice instead...
             # TODO: refactor please
@@ -203,7 +206,7 @@ class DataGenerator(object):
 
                 tim = int(rd.uniform(0,max(T//10,1))) # EARLY WINDOW
                 delta = int(rd.uniform(0,0.5)*PRECISION)
-                etim = min(max(T//10,1)+Distance(ori,des),T-1) #STRICT WINDOW
+                etim = min(max(T//10,1)+TTB*Distance(ori,des),T-1) #STRICT WINDOW
                 ptim = max(T//10,1) #STRICT PTIME
                 cdev = RCDEV
                 cdet = RCDET
@@ -217,7 +220,7 @@ class DataGenerator(object):
 
                 tim = int(rd.uniform(0,max(T//6,1))) # EARLYISH WINDOW
                 delta = int(rd.uniform(0,0.5)*PRECISION)
-                etim = min(max(T//6,1)+Distance(ori,des),T-1) #STRICT WINDOW
+                etim = min(max(T//6,1)+TTB*Distance(ori,des),T-1) #STRICT WINDOW
                 ptim = tim+delta//2 #less strict PTIME
                 cdev = RCDEV
                 cdet = RCDET
@@ -231,7 +234,7 @@ class DataGenerator(object):
 
                 tim = int(rd.uniform(0,max(T//3,1))) # EARLYISH WINDOW
                 delta = int(rd.uniform(0,1)*PRECISION)
-                etim = min(tim+delta+Distance(ori,des),T-1) #MORE FLEXIBLE WINDOW
+                etim = min(tim+delta+TTB*Distance(ori,des),T-1) #MORE FLEXIBLE WINDOW
                 ptim = tim+delta//2 #less strict PTIME
                 cdev = RCDEV
                 cdet = RCDET
@@ -244,7 +247,7 @@ class DataGenerator(object):
 
                 tim = int(rd.uniform(0,max(T/2-2-Distance(ori,des),1)))
                 delta = int(rd.uniform(0,1)*PRECISION)
-                etim = min(tim+delta+Distance(ori,des),T-1)
+                etim = min(tim+delta+TTB*Distance(ori,des),T-1)
                 ptim = tim+delta//2
                 cdev = RCDEV
                 cdet = RCDET
@@ -258,7 +261,7 @@ class DataGenerator(object):
 
                 tim = int(rd.uniform(0,max(T/2-2-Distance(ori,des),1)))
                 delta = int(rd.uniform(0,1)*PRECISION)
-                etim = min(tim+delta+Distance(ori,des),T-1)
+                etim = min(tim+delta+TTB*Distance(ori,des),T-1)
                 ptim = tim+delta//2
                 cdev = RCDEV
                 cdet = RCDET
