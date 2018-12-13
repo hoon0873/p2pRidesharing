@@ -106,32 +106,46 @@ class RandomizedPolicy(object):
         objective_history = []
         riders_history = []
         solution_vectors = []
-
+        rndCnt = 1
         iter_num = 0
+        model.setParam('OutputFlag', 0)
         while True:
+            if rndCnt >= 100: break
             # Solve SmallPrimal
             model.optimize()
-            objective_history.append(model.getAttr('ObjVal'))
-            solution_vectors.append(model.getAttr('X'))
-            # print_feedback(m, constr_list, num_items)
+            if model.status != grb.GRB.OPTIMAL:
+                rndCnt+=1
+                raw_matching = self.getRandomMatching(nRequests,nDrivers,schedules,theta,rtv)
+                riders_bin_vector, drivers_riders_bin_matrix, riders, cost = self.adaptMatching(raw_matching)
+##                matchings.append((riders_bin_vector, drivers_riders_bin_matrix, riders, cost))
+##                matching_riders.append(riders)
+##                matching_costs.append(cost)
 
-            # Save primal and dual variables
-            """
-            sav_primal = model.getAttr('x')
-            sav_dual = model.getAttr('pi')
-            sav_vbasis = model.getAttr('VBasis')
-            sav_cbasis = model.getAttr('CBasis')
-            """
+                
+                
+            else:
+                objective_history.append(model.getAttr('ObjVal'))
+                solution_vectors.append(model.getAttr('X'))
+                # print_feedback(m, constr_list, num_items)
 
-            # Get a new, better matching by solving subproblem
-            # duals = model.getAttr('pi')[1:]
-            duals = [constr_rider_list[i].getAttr('Pi') for i in range(nRequests)]
-            raw_matching = self.getImprovedMatching(duals)
-            riders_bin_vector, drivers_riders_bin_matrix, riders, cost = self.adaptMatching(raw_matching)
-            if riders in riders_history:
-                print('Termination criterion met')
-                if iter_num > 5: break
-                print('But iter num too low %d' % iter_num)
+                # Save primal and dual variables
+                """
+                sav_primal = model.getAttr('x')
+                sav_dual = model.getAttr('pi')
+                sav_vbasis = model.getAttr('VBasis')
+                sav_cbasis = model.getAttr('CBasis')
+                """
+
+                # Get a new, better matching by solving subproblem
+                # duals = model.getAttr('pi')[1:]
+                duals = [constr_rider_list[i].getAttr('Pi') for i in range(nRequests)]
+                raw_matching = self.getImprovedMatching(duals)
+                
+                riders_bin_vector, drivers_riders_bin_matrix, riders, cost = self.adaptMatching(raw_matching)
+                if riders in riders_history:
+                    print('Termination criterion met')
+                    if iter_num > 5: break
+                    print('But iter num too low %d' % iter_num)
             matchings.append((riders_bin_vector, drivers_riders_bin_matrix, riders, cost))
             matching_riders.append(riders)
             matching_costs.append(cost)
@@ -190,10 +204,17 @@ class RandomizedPolicy(object):
         print(matching_costs)
 
         print('Extracting solutions')
-        final_objective = objective_history[-1]
-        final_solution = solution_vectors[-1]
-        final_costs = matching_costs[-1]
-        final_matchings = matching_riders
+        if len(objective_history) != 0:
+            final_objective = objective_history[-1]
+            final_solution = solution_vectors[-1]
+            final_costs = matching_costs[-1]
+            final_matchings = matching_riders
+
+        else:
+            final_objective = 0
+            final_solution = None
+            final_costs = 0
+            final_matchings = None
 
         return final_objective, final_solution, final_costs, final_matchings
 
@@ -338,8 +359,8 @@ if __name__ == '__main__':
     # nRequests = 100
     # nDrivers = 10
 
-    nRequests = 10
-    nDrivers = 2
+    nRequests = 20
+    nDrivers = 10
 
     seed = 142857
     print('Generating data using seed %d...'%seed)

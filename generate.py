@@ -75,13 +75,13 @@ class DataGenerator(object):
 
 
             dWORK = (int(rd.uniform(0.0,0.1)*PRECISION),int(rd.uniform(0.0,0.1)*PRECISION))
-            dp = 1.0 #0.4
+            dp = 0.4 #0.4
             aWORK = (int(rd.uniform(0.7,1.0)*PRECISION),int(rd.uniform(0.7,1.0)*PRECISION))
-            pa = 0 #0.2
+            pa = 0.2 #0.2
             bWORK = (int(rd.uniform(0.4,0.7)*PRECISION),int(rd.uniform(0,0.2)*PRECISION))
-            pb = 0 #0.1
+            pb = 0.1 #0.1
             cWORK = (int(rd.uniform(0.2,0.5)*PRECISION),int(rd.uniform(0.6,0.9)*PRECISION))
-            pc = 0 #0.2
+            pc = 0.2 #0.2
 
             # TODO: use random.choice instead
             # TODO: refactor please
@@ -189,13 +189,13 @@ class DataGenerator(object):
 
 
             dWORK = (int(rd.uniform(0.0,0.3)*PRECISION),int(rd.uniform(0.0,0.3)*PRECISION))
-            dp = 0.5
+            dp = 0.4
             aWORK = (int(rd.uniform(0.7,1.0)*PRECISION),int(rd.uniform(0.7,1.0)*PRECISION))
-            pa = 0.5
+            pa = 0.2
             bWORK = (int(rd.uniform(0.4,0.7)*PRECISION),int(rd.uniform(0,0.2)*PRECISION))
-            pb = 0
+            pb = 0.1
             cWORK = (int(rd.uniform(0.3,0.55)*PRECISION),int(rd.uniform(0.3,0.55)*PRECISION))
-            pc = 0
+            pc = 0.2
 
             # TODO: use random.choice instead...
             # TODO: refactor please
