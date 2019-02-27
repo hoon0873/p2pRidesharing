@@ -18,11 +18,13 @@ import twoMILPPrun as mlp2
 import DecompMILPPrun as mlp3
 
 
+MUTE = 0 # SET IT TO 1 TO MUTE
+
 class DataGenerator(object):
     '''
     TODO: add magic numbers to initialization
     '''
-    def __init__(self, n=15, DD=5, PRECISION=30, CAP=4, rhoo=1.2, seed=142857):
+    def __init__(self, n=15, DD=5, PRECISION=30, CAP=4, rhoo=0.8, seed=142857):
         self.n = n
         self.DD = DD
         self.PRECISION = PRECISION
@@ -40,14 +42,17 @@ class DataGenerator(object):
         n, DD, PRECISION, CAP, rhoo = self.n, self.DD, self.PRECISION, self.CAP, self.rhoo
         R = n
         D = DD
-
+        
+        TTB = 1
+        
         reqs = []
         drivers = []
-        T = Distance((0,0), (0.7*PRECISION, 0.7*PRECISION))+PRECISION
+        T = TTB*Distance((0,0), (0.7*PRECISION, 0.7*PRECISION))+PRECISION
 
         LAMBDA = 1
         BIGNUMBER = 5
-        MUTE = 1
+##        MUTE = 1
+        
 
         ##    timeF = open("data\SW22SWvsEffEFF.txt", 'a+')
         ##    timeF.seek(0)
@@ -61,13 +66,14 @@ class DataGenerator(object):
         ECNT = 0
 
         DCDEV = 1
-        DCDET = 6
+        DCDET = 3
         RCDEV = 1
         RCDET = 3
-        MAXDEV = 10
+##        MAXDEV = TTB*100
 
-        TTB = 1
         T = TTB*Distance((0,0), (0.7*PRECISION, 0.7*PRECISION))+PRECISION
+        MAXDEV = T
+        
 
         for i in range(D):
             NEIGHBORHOOD = (int(rd.uniform(0.45,0.55)*PRECISION),int(rd.uniform(0.45,0.55)*PRECISION))
@@ -75,7 +81,7 @@ class DataGenerator(object):
 
 
             dWORK = (int(rd.uniform(0.0,0.1)*PRECISION),int(rd.uniform(0.0,0.1)*PRECISION))
-            dp = 10.4 #0.4
+            dp = 0.4 #0.4
             aWORK = (int(rd.uniform(0.7,1.0)*PRECISION),int(rd.uniform(0.7,1.0)*PRECISION))
             pa = 0.2 #0.2
             bWORK = (int(rd.uniform(0.4,0.7)*PRECISION),int(rd.uniform(0,0.2)*PRECISION))
@@ -93,7 +99,7 @@ class DataGenerator(object):
                 tim = int(rd.uniform(0,max(T//10,1))) # EARLY WINDOW
                 delta = int(rd.uniform(0,0.5)*PRECISION)
                 etim = min(max(T//10,1)+TTB*Distance(ori,des),T-1) #STRICT WINDOW
-                ptim = max(T//10,1) #STRICT PTIME
+                ptim = tim #STRICT PTIME
 
                 # ADDED BY CK FOR SANITY
                 # etim = min(max(T//3,1)+Distance(ori,des),T-1) #STRICT WINDOW
@@ -113,7 +119,7 @@ class DataGenerator(object):
                 delta = int(rd.uniform(0,0.5)*PRECISION)
 
                 etim = min(max(T//6,1)+TTB*Distance(ori,des),T-1) #STRICT WINDOW
-                ptim = tim+delta//2 #less strict PTIME
+                ptim = int(rd.uniform(tim,max(T//6,1)))  #less strict PTIME
 
                 # ADDED BY CK FOR SANITY
                 # etim = min(max(T//2,1)+Distance(ori,des),T-1) #STRICT WINDOW
@@ -133,7 +139,7 @@ class DataGenerator(object):
                 ##            delta = int(rd.uniform(0,1)*PRECISION)
                 delta = int(rd.gauss(0.5,1)*PRECISION)
                 etim = min(tim+delta+TTB*Distance(ori,des),T-1) #MORE FLEXIBLE WINDOW
-                ptim = tim+delta//2 #less strict PTIME
+                ptim =  int(rd.uniform(tim,max(T//3,1))) #less strict PTIME
                 cdev = DCDEV
                 cdet = DCDET
                 cap = CAP
@@ -147,7 +153,7 @@ class DataGenerator(object):
                 tim = int(rd.uniform(0,max(T/2-2-Distance(ori,des),1)))
                 delta = int(rd.uniform(0,1)*PRECISION)
                 etim = min(tim+delta+TTB*Distance(ori,des),T-1)
-                ptim = tim+delta//2
+                ptim = int(rd.uniform(tim,max(T/2-2-Distance(ori,des),1)))
                 cdev = DCDEV
                 cdet = DCDET
                 cap = CAP
@@ -161,7 +167,7 @@ class DataGenerator(object):
                 tim = int(rd.uniform(0,max(T/2-2-Distance(ori,des),1)))
                 delta = int(rd.uniform(0,1)*PRECISION)
                 etim = min(tim+delta+TTB*Distance(ori,des),T-1)
-                ptim = tim+delta//2
+                ptim = int(rd.uniform(tim,max(T/2-2-Distance(ori,des),1)))
                 cdev = DCDEV
                 cdet = DCDET
                 cap = CAP
@@ -171,10 +177,11 @@ class DataGenerator(object):
 
             maxdev = MAXDEV
 
-
+##
+##            val = 5e7
             drivers.append(Driver(ori,des,tim,etim,ptim,cap,cdev,cdet,val,rho,maxdev))
-            print('drivers.append(Driver(',ori,",",des,",",tim,",",etim,","
-                  ,ptim,",",cap,",",cdev,",",cdet,",",val,",",rho,",",maxdev,'))')
+            if MUTE != 0: print('drivers.append(Driver(',ori,",",des,",",tim,",",etim,","
+                                ,ptim,",",cap,",",cdev,",",cdet,",",val,",",rho,",",maxdev,'))')
         print('# COUNTS: ',ACNT,BCNT,CCNT,DCNT,ECNT)
         print("#REQUESTS",R)
 
@@ -189,7 +196,7 @@ class DataGenerator(object):
 
 
             dWORK = (int(rd.uniform(0.0,0.3)*PRECISION),int(rd.uniform(0.0,0.3)*PRECISION))
-            dp = 10.4
+            dp = 0.4
             aWORK = (int(rd.uniform(0.7,1.0)*PRECISION),int(rd.uniform(0.7,1.0)*PRECISION))
             pa = 0.2
             bWORK = (int(rd.uniform(0.4,0.7)*PRECISION),int(rd.uniform(0,0.2)*PRECISION))
@@ -207,7 +214,7 @@ class DataGenerator(object):
                 tim = int(rd.uniform(0,max(T//10,1))) # EARLY WINDOW
                 delta = int(rd.uniform(0,0.5)*PRECISION)
                 etim = min(max(T//10,1)+TTB*Distance(ori,des),T-1) #STRICT WINDOW
-                ptim = max(T//10,1) #STRICT PTIME
+                ptim = tim #STRICT PTIME
                 cdev = RCDEV
                 cdet = RCDET
                 val = int(Distance(ori,des)*cdet*(1.5+rd.uniform(0,1)))
@@ -221,7 +228,7 @@ class DataGenerator(object):
                 tim = int(rd.uniform(0,max(T//6,1))) # EARLYISH WINDOW
                 delta = int(rd.uniform(0,0.5)*PRECISION)
                 etim = min(max(T//6,1)+TTB*Distance(ori,des),T-1) #STRICT WINDOW
-                ptim = tim+delta//2 #less strict PTIME
+                ptim = int(rd.uniform(tim,max(T//6,1))) #less strict PTIME
                 cdev = RCDEV
                 cdet = RCDET
                 val = int(Distance(ori,des)*cdet*(1.5+rd.uniform(0,1)))
@@ -235,7 +242,7 @@ class DataGenerator(object):
                 tim = int(rd.uniform(0,max(T//3,1))) # EARLYISH WINDOW
                 delta = int(rd.uniform(0,1)*PRECISION)
                 etim = min(tim+delta+TTB*Distance(ori,des),T-1) #MORE FLEXIBLE WINDOW
-                ptim = tim+delta//2 #less strict PTIME
+                ptim = int(rd.uniform(tim,max(T//3,1))) #less strict PTIME
                 cdev = RCDEV
                 cdet = RCDET
                 val = int(Distance(ori,des)*cdet*(1.5+rd.uniform(0,1)))
@@ -248,7 +255,7 @@ class DataGenerator(object):
                 tim = int(rd.uniform(0,max(T/2-2-Distance(ori,des),1)))
                 delta = int(rd.uniform(0,1)*PRECISION)
                 etim = min(tim+delta+TTB*Distance(ori,des),T-1)
-                ptim = tim+delta//2
+                ptim = int(rd.uniform(tim,max(T/2-2-Distance(ori,des),1)))
                 cdev = RCDEV
                 cdet = RCDET
                 val = int(Distance(ori,des)*cdet*(1.5+rd.uniform(0,1)))
@@ -262,7 +269,7 @@ class DataGenerator(object):
                 tim = int(rd.uniform(0,max(T/2-2-Distance(ori,des),1)))
                 delta = int(rd.uniform(0,1)*PRECISION)
                 etim = min(tim+delta+TTB*Distance(ori,des),T-1)
-                ptim = tim+delta//2
+                ptim = int(rd.uniform(tim,max(T/2-2-Distance(ori,des),1)))
                 cdev = RCDEV
                 cdet = RCDET
                 val = int(Distance(ori,des)*cdet*(1.5+rd.uniform(0,1)))
@@ -271,15 +278,14 @@ class DataGenerator(object):
 
             maxdev = MAXDEV
 
+##            val = 5e3
 
             reqs.append(Passenger(ori,des,tim,etim,ptim,cdev,cdet,val,lamb,maxdev))
-            print('reqs.append(Passenger(',ori,",",des,",",tim,",",etim,",",ptim,
-                  ",",cdev,",",cdet,",",val,",",lamb,",",maxdev,'))')
+            if MUTE != 0: print('reqs.append(Passenger(',ori,",",des,",",tim,",",etim,",",ptim,
+                                ",",cdev,",",cdet,",",val,",",lamb,",",maxdev,'))')
         print('# COUNTS: ',ACNT,BCNT,CCNT,DCNT,ECNT)
 
-        newRho = rhoo
-        for i in range(D):
-            drivers[i].rho = newRho
+
 
         return drivers, reqs
 

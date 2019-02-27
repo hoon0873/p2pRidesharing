@@ -651,8 +651,6 @@ def MatchingRTV(drivers,reqs, RHO =None, STABLE=False):
         feaReqs[i] = feaReq
         if TIMEMUTE >=1: print("  Finished pair (2) \t\t%f" %(time.clock()-BEGINTIME))
 
-
-
 #################### TRIP OF SIZE 2 to R ############################################
     for i in range(D):
         Trip = Trips[i]
@@ -902,55 +900,75 @@ def MatchingRTV(drivers,reqs, RHO =None, STABLE=False):
                                  for v in RTV.neighbors(tuple(trip)))
                     + y[j] == 1)
 
-    # STABILITY CONSTRAINT
+     ###STABILITY CONSTRAINT
+    AUDS = []
+    BUDS = []
+    URS = []
+    for i in range(D):
+        AUDS.append({})
+        BUDS.append({})
+        URS.append({})
+        for s in RTV.predecessors('d'+str(i)):
+            AUDS[i][s] = np.zeros(D) # altruistic Utility
+            BUDS[i][s] = np.zeros(D) # Base utility
+            URS[i][s] = np.zeros(R)
+            UDVSIT = -np.ones(D)
+            URVSIT = -np.ones(R)
+##            print(i,s,COST[i][s],x[i][s].x)
+##            print('  ', SCHEDULE[i][s])                                  
+            for (agnt, ti) in SCHEDULE[i][s]:
+                if agnt == 'd' and UDVSIT[i] ==-1:
+                    AUDS[i][s][i] = drivers[i].val
+                    BUDS[i][s][i] = drivers[i].val
+                    AUDS[i][s][i] -= drivers[i].cdev*abs(ti-drivers[i].pt)
+                    BUDS[i][s][i] -= drivers[i].cdev*abs(ti-drivers[i].pt)
+                    UDVSIT[i] = ti
+                elif agnt == 'd':
+                    AUDS[i][s][i] -= drivers[i].cdet*(ti-UDVSIT[i])
+                    BUDS[i][s][i] -= drivers[i].cdet*(ti-UDVSIT[i])
+                elif URVSIT[agnt] == -1:
+                    URS[i][s][agnt] = reqs[agnt].val
+                    URS[i][s][agnt] -= reqs[agnt].cdev*abs(ti-reqs[agnt].pt)
+                    URVSIT[agnt] = ti
+                else:
+                    URS[i][s][agnt] -= reqs[agnt].cdet*(ti-URVSIT[agnt])
+                    AUDS[i][s][i] += drivers[i].rho*URS[i][s][agnt]
 
-    def tripLength(S):
-        if 'EMPTY' in S:
-            return 0
-        else:
-            return len(S)
+
+                        
     if STABLE == True:
         for d in range(D):
             for S in RTV.predecessors('d'+str(d)):
-    ##            print()
-    ##            print("D:S:  ",d,S)
-    ##            print(COST[d][S]/(tripLength(S)+1))
                 if 'EMPTY' in S:
                     setS = set()
                 else:
                     setS = S
-    ##
-    ##            for Sp in RTV.predecessors('d'+str(d)):
-    ##                if COST[d][Sp]/(tripLength(Sp)+1) <= COST[d][S]/(tripLength(S)+1):
-    ##                    print(d,Sp)
-    ##
-    ##            for r in setS:
-    ##                for Sp in RTV.neighbors(r):
-    ##                    for dp in RTV.neighbors(tuple(Sp)):
-    ##                        if COST[int(dp[1:])][Sp]/(tripLength(Sp)+1) <= COST[d][S]/(tripLength(S)+1):
-    ##                            print(int(dp[1:]),Sp)
-    ##
-    ##            for r in setS:
-    ##                if reqs[r].lamb <= COST[d][S]/(tripLength(S)+1):
-    ##                    print(r)
-                                                    
+
+    # NOT TRUE
+    
+
+                #CALCULATE UTILITY BASED ON SCHEDULE[d][S]
+    
                 m.addConstr(grb.quicksum(x[d][Sp]
                                          for Sp in RTV.predecessors('d'+str(d))
-                                           if COST[d][Sp]/(tripLength(Sp)+1) <= COST[d][S]/(tripLength(S)+1)
+                                           if AUDS[d][Sp][d] <= AUDS[d][S][d]
                                          )
                             + grb.quicksum(x[int(dp[1:])][Sp]
                                            for r in setS
                                            for Sp in RTV.neighbors(r)
                                            for dp in RTV.neighbors(tuple(Sp))
-                                             if COST[int(dp[1:])][Sp]/(tripLength(Sp)+1) <= COST[d][S]/(tripLength(S)+1)
+                                             if URS[int(dp[1:])][Sp][r] <= URS[d][S][r]
                                            )
                             + grb.quicksum(y[r]
                                            for r in setS
-                                             if reqs[r].lamb <= COST[d][S]/(tripLength(S)+1))
+                                             if reqs[r].val-reqs[r].lamb <= URS[d][S][r]
+                                           )
                             + x[d][S]
         ##                        + grb.quicksum(x[dp][Sp]
         ##                                       for dp)
                             >= 1)
+                
+
             
 
     # OBJECTIVE FUNCTION

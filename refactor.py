@@ -10,7 +10,7 @@ from Classes import Passenger
 from NewFeasibleBruthWTime import travel
 from Feasible import travel as travelMILP
 from itertools import combinations as COMB
-from NewFeasibleBruth import Distance
+from NewFeasibleBruthWTime import Distance
 import math
 from types import SimpleNamespace
 
@@ -20,14 +20,16 @@ DEFAULT_PARAMS.BIGNUMBER = 5
 DEFAULT_PARAMS.MUTE = 0 # Set to 0 to Mute
 DEFAULT_PARAMS.LBPRUN = 1 # Set to 1 to do LB Pruning
 DEFAULT_PARAMS.RVPRUN = 1 # Set to 1 to do RV Pruning
+DEFAULT_PARAMS.SIMDPRUN = 1 # set to 1 to do similar Drivers pruning
+DEFAULT_PARAMS.DPLBPRUN=1 # set to 1 to do DP LB  Prun in travel Function
 DEFAULT_PARAMS.GreedySWITCH = 0 # Set to 1 to do Greedy
 DEFAULT_PARAMS.PREPROCESSING = 0 # Set to 1 to do PREPROCESSING [Decomposition]
-DEFAULT_PARAMS.SIMDPRUN = 1 # set to 1 to do similar Drivers pruning
 DEFAULT_PARAMS.CONTINUOUS = 0
 DEFAULT_PARAMS.TimeSwitch = 1 # set to 1 to do timelimit
 DEFAULT_PARAMS.TimeLIMIT = 60*60*2
 DEFAULT_PARAMS.TIMEMUTE = 0 # Set 0 to mute; 1 to see high level timeline; 2 to detailed timeline;
-DEFAULT_PARAMS.RHO = 1.2 # May want to change this
+DEFAULT_PARAMS.RHO = None # May want to change this
+DEFAULT_PARAMS.IR = 1 # Set to 1 to do IR Constraints
 
 class Solver(object):
     def __init__(self, params=DEFAULT_PARAMS):
@@ -37,13 +39,18 @@ class Solver(object):
         self.requests = None
         self.drivers = None
         self.COST = None
+        self.lamb = None
         self.preprocessed = False
+        self.objCost = None
+        self.driCost = None
+        self.satRiderCost = None
+        self.infCost = 0
 
 
         self.params = params
 
 
-    def setData(self, drivers, requests):
+    def setData(self, drivers, requests,RHO=None):
         self.preprocessed = False
 
         self.requests, self.drivers = requests, drivers
@@ -53,8 +60,10 @@ class Solver(object):
         self.T = min(self.drivers[i].et for i in range(self.D))
         self.T = max(self.drivers[i].lt for i in range(self.D)) - self.T
 
+##        self.params.RHO = 0
+##        self.params.STABLE = STABLE
 
-    def preprocess(self):
+    def preprocess(self, STABLE = False):
         '''
         Computes cost matrix
         :return:
@@ -67,6 +76,8 @@ class Solver(object):
         drivers, reqs = self.drivers, self.requests
 
         R, D, T = self.R, self.D, self.T
+
+        IRCONS = self.params.IR
 
         # BEGINTIME = time.clock()
         COST = []
@@ -221,20 +232,23 @@ class Solver(object):
                     if Curtim+Distance(J.des,d.des) >= d.lt: continue
 
                     # v_d + rho_d*(v_r - mincost_r) - mincost_d -minDevCost_{dr}< v_d - d_cdet*dist_d
-                    if d.cdet*(Distance(d.ori,d.des))+d.rho*(J.val-J.cdet*Distance(J.ori,J.des)) \
-                            -d.cdet*(Distance(J.ori,J.des)) \
-                            -d.cdet*(Distance(d.ori,J.ori)+Distance(J.des,d.des)) \
-                            -min(d.cdev,J.cdev*d.rho)*abs(J.pt-d.pt-Distance(d.ori,J.ori))< -1e-5: #driver cannot be IR
-                        continue
-
+                    if IRCONS == 1:
+                        if d.cdet*(Distance(d.ori,d.des))+d.rho*(J.val-J.cdet*Distance(J.ori,J.des)) \
+                                -d.cdet*(Distance(J.ori,J.des)) \
+                                -d.cdet*(Distance(d.ori,J.ori)+Distance(J.des,d.des)) \
+                                -min(d.cdev,J.cdev*d.rho)*abs(J.pt-d.pt-Distance(d.ori,J.ori))< -1e-5: #driver cannot be IR
+                            continue
+                
                 if self.params.TIMEMUTE >=2: print('   ---- before travel', time.clock()-BEGINTIME)
-                bol,cost,route = travel(drivers[i],[J],RHO=self.params.RHO)
+                bol,cost,route = travel(drivers[i],[J],RHO=self.params.RHO, DPLBPRUN=self.params.DPLBPRUN, IRCONS = IRCONS)
                 if self.params.TIMEMUTE >=2: print('\t',bol,cost,route,i,j)
                 if self.params.TIMEMUTE >=2: print('   ---- after travel', time.clock()-BEGINTIME)
                 ##            if TIMEMUTE !=0: print('\tbefore travel MILP', time.clock()-BEGINTIME)
                 ##            bol2,cost2,route2 = travelMILP(drivers[i],[J])
                 ##            if TIMEMUTE !=0: print('\tafter travel MILP', time.clock()-BEGINTIME)
                 ##            print('\t',bol,bol2,cost,cost2)
+##                print("PROBLEM????")
+##                print(cost, route, self.params.RHO)
                 if bol == True:
                     FeasibleMat[i][j] = 1
                     RV.add_edge('d'+str(i), j, weight=cost)
@@ -262,8 +276,8 @@ class Solver(object):
         ##                RV.add_edge('d'+str(i), j, weight=cost)
         ##                COST[i][tuple({j})] = cost
 
-
-##        print(FeasibleMat)
+        print('Feasible Mat')
+        print(FeasibleMat)
 ##        time.sleep(5)
         if self.params.MUTE != 0: print(FeasibleMat)
         if self.params.TIMEMUTE >=1: print("Finished RV Time: %f" %(time.clock()-BEGINTIME))
@@ -284,6 +298,7 @@ class Solver(object):
                         SimilarD[d2].add(d1)
                     else:
                         SimilarD[d2] = set([d1])
+        print('Similar Drivers')
         print(SimilarD)
 
 
@@ -349,12 +364,17 @@ class Solver(object):
             SCHEDULE[i]['EMPTY'+str(i)] = [('d',drivers[i].pt),('d',drivers[i].pt+Distance(drivers[i].ori, drivers[i].des))]
             ##        COST[i]['EMPTY'+str(i)] = 0 # By convension we only care about detour and deviation cost
 
-        print('================COST==============')
-        print(COST)
+        print(reqs[0].cdet*Distance(reqs[0].ori,reqs[0].des))
+
+        if self.params.TIMEMUTE >=1: print('================COST==============')
+        if self.params.TIMEMUTE >=1: print(COST)
         self.COST, self.RTV, self.SCHEDULE = COST, RTV, SCHEDULE
+        self.lamb = [reqs[j].lamb for j in range(R)]
 
     def constructRTV2toR(self, BEGINTIME, COST, COUNT, D, R, RTV, SCHEDULE, SimilarD, TripCosts, Trips, drivers,
                          feaReqs, reqs):
+
+        IRCONS = self.params.IR
         for i in range(D):
             Trip = Trips[i]
             TripCost = TripCosts[i]
@@ -543,7 +563,7 @@ class Solver(object):
 
                                 if self.params.TIMEMUTE >= 2: print('\tbefore travel', time.clock() - BEGINTIME)
                                 bol, cost, route = travel(drivers[i], reqL, LB=LB, UB=UB, RHO=self.params.RHO,
-                                                          UBROUTE=UBRs, INFEASIBLEUB=INFEASIBLEUB)
+                                                          UBROUTE=UBRs, INFEASIBLEUB=INFEASIBLEUB, DPLBPRUN=self.params.DPLBPRUN, IRCONS = IRCONS )
                                 if self.params.TIMEMUTE >= 2: print('\tafter travel', time.clock() - BEGINTIME, '\t',
                                                                     bol)
 
@@ -558,7 +578,7 @@ class Solver(object):
                             else:  # LPPRUN == 0
                                 if TSize >= 5 and self.params.MUTE != 0: print(reqList)
                                 if self.params.TIMEMUTE >= 2: print('\t\tbefore travel\t', time.clock() - BEGINTIME)
-                                bol, cost, route = travel(drivers[i], reqL, RHO=self.params.RHO)
+                                bol, cost, route = travel(drivers[i], reqL, RHO=self.params.RHO, DPLBPRUN=self.params.DPLBPRUN, IRCONS = IRCONS)
                                 if self.params.TIMEMUTE >= 2: print('\t\tafter travel\t', time.clock() - BEGINTIME,
                                                                     '\t', bol)
 
@@ -585,6 +605,8 @@ class Solver(object):
                 if self.params.MUTE != 0: print('COUNT:\t', COUNT)
 
     def constructRTV(self, BEGINTIME, COST, D, R, RV, SCHEDULE, drivers, reqs):
+
+        IRCONS = self.params.IR
         # RV Graph
         RTV = nx.DiGraph()
         Trips = []
@@ -642,7 +664,7 @@ class Solver(object):
                     ##                print(reqList)
                     if self.params.TIMEMUTE >= 2: print('\tbefore travel', time.clock() - BEGINTIME)
                     COUNT += 1
-                    bol, cost, route = travel(drivers[i], reqList, RHO=self.params.RHO, INFEASIBLEUB=INFEASIBLEUB)
+                    bol, cost, route = travel(drivers[i], reqList, RHO=self.params.RHO, INFEASIBLEUB=INFEASIBLEUB,DPLBPRUN=self.params.DPLBPRUN, IRCONS = IRCONS)
                     if self.params.TIMEMUTE >= 2: print('\tafter travel', time.clock() - BEGINTIME)
                     ##                if TIMEMUTE >=2: print('\tbefore travel MILP', time.clock()-BEGINTIME)
                     ##                bol2,cost2,route2 = travelMILP(drivers[i],reqList)
@@ -715,10 +737,24 @@ class Solver(object):
             ######                        pvRt = [i-1 if i!=0 else 'd' for i in pvRt]
             ######                        TripCost[Tr] = (pvCost,pvRt)
 
-            TripCosts[i] = TripCost
-            feaReqs[i] = feaReq
+            if self.params.LBPRUN != 0: TripCosts[i] = TripCost
+            if self.params.LBPRUN != 0: feaReqs[i] = feaReq
             if self.params.TIMEMUTE >= 1: print("  Finished pair (2) \t\t%f" % (time.clock() - BEGINTIME))
         return COUNT, RTV, TripCosts, Trips, feaReqs
+
+    def computeInfCost(self,nRequests,schedules):
+        infCost = 0
+        feasible_riders = [False] * nRequests
+        for s in schedules:
+            for k, v in s.items():  # keys contain id's (tuple of integers) of riders
+                if k[0] == 'E': continue # TODO: change this hacky logic...
+                for j in k:
+                    feasible_riders[j] = True
+        for j, z in enumerate(feasible_riders):
+            if not z:
+                infCost += self.requests[j].lamb
+        return infCost
+        
 
     def computeUBroutes(self, RT1, RT2, r1, r2, MUTEWITHINFUNCTION = 0):
         """
@@ -905,7 +941,7 @@ class Solver(object):
         return UBRS
 
 
-    def solve(self, COST=None):
+    def solve(self, COST=None, STABLE=False, LAMB=True):
         '''
         :param COST: (optional) modified costs. By default we will use those used in the precomputation
         :return:
@@ -914,6 +950,7 @@ class Solver(object):
         drivers, reqs = self.drivers, self.requests
         D, R = self.D, self.R
         RTV, SCHEDULE = self.RTV, self.SCHEDULE
+##        STABLE = self.params.STABLE
         if COST is None: COST = self.COST
 
         if not self.preprocessed:
@@ -952,11 +989,161 @@ class Solver(object):
                                      for v in RTV.neighbors(tuple(trip)))
                         + y[j] == 1)
 
+
+    # STABILITY CONSTRAINT
+        AUDS = []
+        BUDS = []
+        URS = []
+        for i in range(D):
+            AUDS.append({})
+            BUDS.append({})
+            URS.append({})
+            for s in RTV.predecessors('d'+str(i)):
+                AUDS[i][s] = np.zeros(D) # altruistic Utility
+                BUDS[i][s] = np.zeros(D) # Base utility
+                URS[i][s] = np.zeros(R)
+                UDVSIT = -np.ones(D)
+                URVSIT = -np.ones(R)
+    ##            print(i,s,COST[i][s],x[i][s].x)
+    ##            print('  ', SCHEDULE[i][s])                                  
+                for (agnt, ti) in SCHEDULE[i][s]:
+                    if agnt == 'd' and UDVSIT[i] ==-1:
+                        AUDS[i][s][i] = drivers[i].val
+                        BUDS[i][s][i] = drivers[i].val
+                        AUDS[i][s][i] -= drivers[i].cdev*abs(ti-drivers[i].pt)
+                        BUDS[i][s][i] -= drivers[i].cdev*abs(ti-drivers[i].pt)
+                        UDVSIT[i] = ti
+                    elif agnt == 'd':
+                        AUDS[i][s][i] -= drivers[i].cdet*(ti-UDVSIT[i])
+                        BUDS[i][s][i] -= drivers[i].cdet*(ti-UDVSIT[i])
+                    elif URVSIT[agnt] == -1:
+                        URS[i][s][agnt] = reqs[agnt].val
+                        URS[i][s][agnt] -= reqs[agnt].cdev*abs(ti-reqs[agnt].pt)
+                        URVSIT[agnt] = ti
+                    else:
+                        URS[i][s][agnt] -= reqs[agnt].cdet*(ti-URVSIT[agnt])
+                        AUDS[i][s][i] += drivers[i].rho*URS[i][s][agnt]
+        URLAMB = [0]*R
+        for i in range(R):
+            
+            URLAMB[i] = reqs[i].lamb-reqs[i].lamb
+
+##        print("AUDS")
+##        print(AUDS)
+
+
+##        print('printing stable')
+##        print(STABLE)
+##        print(type(STABLE))
+        if STABLE == True:
+            for d in range(D):
+                for S in RTV.predecessors('d'+str(d)):
+                    if 'EMPTY' in S:
+                        setS = set()
+                    else:
+                        setS = S
+
+        # NOT TRUE
+        
+
+                    #CALCULATE UTILITY BASED ON SCHEDULE[d][S]
+        
+                    m.addConstr(grb.quicksum(x[d][Sp]
+                                             for Sp in RTV.predecessors('d'+str(d))
+                                               if AUDS[d][Sp][d] >= AUDS[d][S][d]
+                                             )
+                                + grb.quicksum(x[int(dp[1:])][Sp]
+                                               for r in setS
+                                               for Sp in RTV.neighbors(r)
+                                               for dp in RTV.neighbors(tuple(Sp))
+                                                 if URS[int(dp[1:])][Sp][r] >= URS[d][S][r]
+                                               )
+                                + grb.quicksum(URLAMB[r]*y[r]
+                                               for r in setS
+                                                 if reqs[r].val-reqs[r].lamb >= URS[d][S][r]
+                                               )
+                                + x[d][S]
+            ##                        + grb.quicksum(x[dp][Sp]
+            ##                                       for dp)
+                                >= 1)
+
+        elif type(STABLE) == int:
+            STABLE = int(STABLE)
+##            print("I'm in Budget palce"+str(STABLE))
+
+            Budget = STABLE
+            betaD = m.addVars(D, vtype = 'c', lb=0)
+            betaR = m.addVars(R, vtype = 'c', lb=0)
+            mu = []
+            for d in range(D):
+                mu.append({})
+                for S in RTV.predecessors('d'+str(d)):
+                    mu[d][S] = {}
+                    for i in S:
+                        mu[d][S][i] = m.addVar(vtype = grb.GRB.BINARY)
+                    mu[d][S]['d'+str(d)] = m.addVar(vtype=grb.GRB.BINARY)
+
+
+            
+            for d in range(D):
+                for S in RTV.predecessors('d'+str(d)):
+##                    print("for each d S: "+str(d)+" "+str(S))
+##                    for Sp in RTV.predecessors('d'+str(d)):
+##                        print(AUDS[d][Sp][d], end=' ')
+##                        print('d: '+str(d)+" "+str(Sp))
+##                    print(AUDS[d][S][d], end=' ')
+##                    print('d: '+str(d)+" "+str(S))
+                    
+                    m.addConstr(betaD[d]
+                                +
+                                grb.quicksum(AUDS[d][Sp][d]*x[d][Sp]
+                                             for Sp in RTV.predecessors('d'+str(d)))
+                                >=
+                                AUDS[d][S][d]*mu[d][S]['d'+str(d)])
+
+
+                    if S[0] == 'E': # It's EMPTY
+                        m.addConstr(mu[d][S]['d'+str(d)] >= 1)
+                        continue
+
+                    m.addConstr(mu[d][S]['d'+str(d)]+grb.quicksum(mu[d][S][i] for i in S)
+                                >= 1)
+                    for i in S:
+                        
+##                        print(URS[d][S][i])
+
+                        m.addConstr(betaR[i]
+                                    +
+                                    grb.quicksum(URS[int(dp[1:])][Sp][i]*x[int(dp[1:])][Sp]
+                                                 for Sp in RTV.neighbors(i)
+                                                 for dp in RTV.neighbors(tuple(Sp)))
+                                    +
+                                    URLAMB[i]*y[i]
+                                    >=
+                                    URS[d][S][i]*mu[d][S][i])
+            m.addConstr(grb.quicksum(betaD[d] for d in range(D))
+                        +
+                        grb.quicksum(betaR[r] for r in range(R))
+                        <=
+                        Budget)
+            
+                    
+            
+            
+            
+
+
+        LAMBCOST =[]
+        for j in range(R):
+            if LAMB==True: LAMBCOST.append(reqs[j].lamb)
+            else: LAMBCOST.append(0)
+            
+
         # OBJECTIVE FUNCTION
         m.setObjective(grb.quicksum(COST[d][S]*x[d][S]
                                     for d in range(D)
                                     for S in RTV.predecessors('d'+str(d)))
-                       + grb.quicksum(reqs[j].lamb*y[j]
+                       + grb.quicksum(LAMBCOST[j]*y[j]
                                       for j in range(R)),
                        grb.GRB.MINIMIZE)
 
@@ -976,9 +1163,25 @@ class Solver(object):
         m.setParam('OutputFlag', self.params.MUTE)
         m.optimize()
 
+##        print(m.status)
+##        if m.status != 2:
+##            return m,x,
+            
+
+##        if type(STABLE) == int:
+##            print("BETA")
+##            print(betaR)
+##            print(betaD)
+##            print('mumumu')
+##            for d in range(D):
+##                for s in RTV.predecessors('d'+str(d)):
+##                    print('d: '+str(d)+'  S: '+str(s))
+##                    print(mu[d][s])
+##                    print(x[d][s])
+
         ENDTIME = time.clock()
         if self.params.TIMEMUTE >=1: print("Matching Time %f" %(ENDTIME - MILPSTARTTIME))
-        print("\n\nRTV3\t Total Time %f" %(ENDTIME - BEGINTIME))
+        if self.params.TIMEMUTE >=1:  print("\n\nRTV3\t Total Time %f" %(ENDTIME - BEGINTIME))
 
 
         AUD = np.zeros(D) # altruistic Utility
@@ -986,6 +1189,8 @@ class Solver(object):
         UR = np.zeros(R)
         UDVSIT = -np.ones(D)
         URVSIT = -np.ones(R)
+        driCost = 0
+        satRiderCost = 0
         for i in range(D):
             for s in x[i]:
                 if x[i][s].x > 0:
@@ -997,17 +1202,22 @@ class Solver(object):
                             BUD[i] = drivers[i].val
                             AUD[i] -= drivers[i].cdev*abs(ti-drivers[i].pt)
                             BUD[i] -= drivers[i].cdev*abs(ti-drivers[i].pt)
+                            driCost += drivers[i].cdev*abs(ti-drivers[i].pt)
                             UDVSIT[i] = ti
                         elif agnt == 'd':
                             AUD[i] -= drivers[i].cdet*(ti-UDVSIT[i])
                             BUD[i] -= drivers[i].cdet*(ti-UDVSIT[i])
+                            driCost += drivers[i].cdet*(ti-UDVSIT[i])
                         elif URVSIT[agnt] == -1:
                             UR[agnt] = reqs[agnt].val
                             UR[agnt] -= reqs[agnt].cdev*abs(ti-reqs[agnt].pt)
                             URVSIT[agnt] = ti
+                            satRiderCost += reqs[agnt].val
+                            satRiderCost -= reqs[agnt].cdev*abs(ti-reqs[agnt].pt)
                         else:
                             UR[agnt] -= reqs[agnt].cdet*(ti-URVSIT[agnt])
                             AUD[i] += drivers[i].rho*UR[agnt]
+                            satRiderCost -= reqs[agnt].cdet*(ti-URVSIT[agnt])
 
         objSW = 0
         objEff = 0
@@ -1026,7 +1236,13 @@ class Solver(object):
         for z in x:
             for k, v in z.items():
                 z[k] = v.getAttr('X')
+
+        INFCOST = self.computeInfCost(R, SCHEDULE)
+        self.objCost = m.objVal-INFCOST
+        self.driCost = driCost
+        self.satRiderCost = satRiderCost
         return m,x,objSW,objEff,ENDTIME-BEGINTIME
+    
 
 
 if __name__ == '__main__':

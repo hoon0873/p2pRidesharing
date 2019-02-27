@@ -15,7 +15,10 @@ MUTE = 0
 
 TIMEMUTE = 0
 
-DPLBPRUN = 1
+DEFAULTDPLPBRPUN = 1
+IRCONS = 1 
+
+
 DPEVERYPRUN = 0
 global BRUTECOUNT
 global DPCOUNT
@@ -88,7 +91,7 @@ def Distance(i,j):
     return math.ceil(np.linalg.norm(i-j))
 
 
-def travel(d, reqs, LB = None,  UB = None, RHO = None, UBROUTE = None, INFEASIBLEUB = 2e9):
+def travel(d, reqs, LB = None,  UB = None, RHO = None, UBROUTE = None, INFEASIBLEUB = 2e9,DPLBPRUN = DEFAULTDPLPBRPUN, IRCONS = IRCONS):
     global BRUTECOUNT
     global DPCOUNT
     global MILPCOUNT
@@ -145,7 +148,8 @@ def travel(d, reqs, LB = None,  UB = None, RHO = None, UBROUTE = None, INFEASIBL
 ##    TotalDriVal = d.val + sum(d.rho*rq.val for rq in reqs)
 
     if RHO == None:
-        RHO = d.rho
+##        RHO = d.rho
+        RHO = 0
 
 
     def TrueCost(TreeCost, Rt, disCost):
@@ -255,20 +259,18 @@ def travel(d, reqs, LB = None,  UB = None, RHO = None, UBROUTE = None, INFEASIBL
 
 
         #Individually Rational
+        if IRCONS == 1:
+            for r in range(R):
+                m.addConstr(reqs[r].val - grb.quicksum(Cdev[oriInd[r]][t]*z[oriInd[r]][t] for t in TSet[oriInd[r]])
+                            - grb.quicksum(Cdis[r][t][tp]*g[r][t][tp] for t in TSet[oriInd[r]] for tp in TSet[desInd[r]])
+                            >= reqs[r].val - reqs[r].lamb)
 
-
-
-        for r in range(R):
-            m.addConstr(reqs[r].val - grb.quicksum(Cdev[oriInd[r]][t]*z[oriInd[r]][t] for t in TSet[oriInd[r]])
-                        - grb.quicksum(Cdis[r][t][tp]*g[r][t][tp] for t in TSet[oriInd[r]] for tp in TSet[desInd[r]])
-                        >= reqs[r].val - reqs[r].lamb)
-
-        m.addConstr(d.rho* grb.quicksum(reqs[r].val -grb.quicksum(Cdev[oriInd[r]][t]*z[oriInd[r]][t] for t in TSet[oriInd[r]])
-                        - grb.quicksum(Cdis[r][t][tp]*g[r][t][tp] for t in TSet[oriInd[r]] for tp in TSet[desInd[r]]) for r in range(R))
-                    +d.val - grb.quicksum(Cdev[DORI][t]*z[DORI][t] for t in TSet[DORI])-grb.quicksum(Cdis[DRIVER][t][tp]*g[DRIVER][t][tp]
-                                                                                                      for t in TSet[DORI] for tp in TSet[DDES])
-                    >= d.val - d.cdet*Distance(d.ori, d.des)
-                    )
+            m.addConstr(d.rho* grb.quicksum(reqs[r].val -grb.quicksum(Cdev[oriInd[r]][t]*z[oriInd[r]][t] for t in TSet[oriInd[r]])
+                            - grb.quicksum(Cdis[r][t][tp]*g[r][t][tp] for t in TSet[oriInd[r]] for tp in TSet[desInd[r]]) for r in range(R))
+                        +d.val - grb.quicksum(Cdev[DORI][t]*z[DORI][t] for t in TSet[DORI])-grb.quicksum(Cdis[DRIVER][t][tp]*g[DRIVER][t][tp]
+                                                                                                          for t in TSet[DORI] for tp in TSet[DDES])
+                        >= d.val - d.cdet*Distance(d.ori, d.des)
+                        )
 
 
         # sum of z_vt = 1
@@ -346,8 +348,9 @@ def travel(d, reqs, LB = None,  UB = None, RHO = None, UBROUTE = None, INFEASIBL
 ##        print(m.Status)
 
 
-        iniCost = sum(-RHO*reqq.val for reqq in reqs)
-##        print('rho: ',RHO)
+        if RHO != None: iniCost = sum(-RHO*reqq.val for reqq in reqs)
+        else: iniCost = 0
+##        print('DEBUGGING HERE: rho: ',RHO)
         rtRt=[]
         for v in range(N):
             for t in TSet[v]:
@@ -575,7 +578,8 @@ def travel(d, reqs, LB = None,  UB = None, RHO = None, UBROUTE = None, INFEASIBL
             if TIMEMUTE !=0: print('\t\t\t\t  ', nowCost,retRt)
             if TIMEMUTE !=0: print('\t\t\t\t', MILPCOUNT, 'after MILP', time.clock()-BEGINTIME)
             if nowCost == None:
-                return 2e9,[]
+                if IRCONS != 1: return 2e9, []
+                if IRCONS == 1: return 5e8,[] ##IR CHAGNES##
 ##            driCost += nowDriCost
 ##            if driCost > TotalDriVal: # driver's utility is negative
 ##                return 2e9,[]
@@ -782,7 +786,8 @@ def travel(d, reqs, LB = None,  UB = None, RHO = None, UBROUTE = None, INFEASIBL
         return minCost,minSchedule                            
 
 
-    initCost = sum(-RHO*reqq.val for reqq in reqs)                    
+    if RHO == None: initCost = 0
+    else: initCost = sum(-RHO*reqq.val for reqq in reqs)                    
     UBCost = 2e9
     UBRt = []
     if UBROUTE !=None:
