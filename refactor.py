@@ -754,7 +754,8 @@ class Solver(object):
             if not z:
                 infCost += self.requests[j].lamb
         return infCost
-        
+        
+
 
     def computeUBroutes(self, RT1, RT2, r1, r2, MUTEWITHINFUNCTION = 0):
         """
@@ -1248,7 +1249,7 @@ class Solver(object):
 if __name__ == '__main__':
     from generate import DataGenerator
 
-    generator = DataGenerator(n=10, DD=40, PRECISION=100, CAP=4, rhoo=1.2)
+    generator = DataGenerator(n=30, DD=2, PRECISION=100, CAP=4, rhoo=1.2)
 
 
     print('Generating data...')
@@ -1265,7 +1266,40 @@ if __name__ == '__main__':
     print('====================')
 
     m, x, objSW, objEff, time = solver.solve()
-    print(m.getAttr('x'))
-    for i in range(40):
-        print(x[i])
-    print(objSW)
+##    print(m.getAttr('x'))
+##    for i in range(40):
+##        print(x[i])
+
+    def PrintSchedule(sch, d):
+        pickUp = set()
+        retSch = []
+        numSch = []
+        for r, t in sch:
+            if r == 'd' and r not in pickUp:
+                pickUp.add(r)
+                retSch.append((d,t))
+                numSch.append((drivers[d].ori,t))
+            elif r== 'd':
+                retSch.append((d,t))
+                numSch.append((drivers[d].des,t))
+            elif r in pickUp:
+                retSch.append(('des '+str(r),t))
+                des = requests[r].des
+                numSch.append((des,t))
+            else:
+                pickUp.add(r) 
+                retSch.append(('ori '+str(r),t))
+                ori = requests[r].ori
+                numSch.append((ori,t))
+
+        return retSch, numSch
+        
+    print('====================')
+    print('SCHEDULES')
+    for d in range(len(x)):
+        for s in x[d]:
+            if x[d][s] == 1:
+                rS, nS = PrintSchedule(solver.SCHEDULE[d][s], d)
+                print(rS)
+                print(nS)
+                
