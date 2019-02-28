@@ -8,7 +8,7 @@ from Classes import Driver
 from Classes import Passenger
 ##from NewFeasibleBruth import travel
 from NewFeasibleBruthWTime import travel
-from Feasible import travel as travelMILP
+##from Feasible import travel as travelMILP
 from itertools import combinations as COMB
 from NewFeasibleBruthWTime import Distance
 import math
