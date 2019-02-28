@@ -1277,10 +1277,10 @@ if __name__ == '__main__':
         for r, t in sch:
             if r == 'd' and r not in pickUp:
                 pickUp.add(r)
-                retSch.append((d,t))
+                retSch.append(('ori d '+str(d),t))
                 numSch.append((drivers[d].ori,t))
             elif r== 'd':
-                retSch.append((d,t))
+                retSch.append(('des d '+str(d),t))
                 numSch.append((drivers[d].des,t))
             elif r in pickUp:
                 retSch.append(('des '+str(r),t))
