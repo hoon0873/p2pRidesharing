@@ -735,7 +735,7 @@ class RandomizedPolicy(object):
 
 if __name__ == '__main__':
 ##    from generate import DataGenerator
-    from generateEasy2 import DataGenerator
+    from generate    import DataGenerator
 
 ##    nRequests = 90
 ##    nDrivers = 10

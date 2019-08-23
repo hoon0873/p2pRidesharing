@@ -13,6 +13,8 @@ from itertools import combinations as COMB
 from NewFeasibleBruthWTime import Distance
 import math
 from types import SimpleNamespace
+import random
+import copy
 
 DEFAULT_PARAMS = SimpleNamespace()
 DEFAULT_PARAMS.LAMBDA = 1
@@ -30,6 +32,8 @@ DEFAULT_PARAMS.TimeLIMIT = 60*60*2
 DEFAULT_PARAMS.TIMEMUTE = 0 # Set 0 to mute; 1 to see high level timeline; 2 to detailed timeline;
 DEFAULT_PARAMS.RHO = None # May want to change this
 DEFAULT_PARAMS.IR = 1 # Set to 1 to do IR Constraints
+DEFAULT_PARAMS.HEURISTIC = 0 #set to 1 to do HEURISTIC
+DEFAULT_PARAMS.MAXTSIZE = None
 
 class Solver(object):
     def __init__(self, params=DEFAULT_PARAMS):
@@ -46,6 +50,8 @@ class Solver(object):
         self.satRiderCost = None
         self.infCost = 0
 
+        self.varY = None
+        self.varX = None
 
         self.params = params
 
@@ -348,9 +354,10 @@ class Solver(object):
 
 
         # TRIP OF SIZE 2 to R
-        self.constructRTV2toR(BEGINTIME, COST, COUNT, D, R, RTV, SCHEDULE,
-                              SimilarD, TripCosts, Trips, drivers, feaReqs,
-                              reqs)
+        if self.params.HEURISTIC != 1:
+            self.constructRTV2toR(BEGINTIME, COST, COUNT, D, R, RTV, SCHEDULE,
+                                  SimilarD, TripCosts, Trips, drivers, feaReqs,
+                                  reqs)
         ############# End extracted portion ############
 
 
@@ -372,7 +379,10 @@ class Solver(object):
         self.lamb = [reqs[j].lamb for j in range(R)]
 
     def constructRTV2toR(self, BEGINTIME, COST, COUNT, D, R, RTV, SCHEDULE, SimilarD, TripCosts, Trips, drivers,
-                         feaReqs, reqs):
+                         feaReqs, reqs,MaxTSize = None):
+
+        if self.params.MAXTSIZE == None: MaxTSize = R+1
+        else: MaxTSize = self.params.MAXTSIZE
 
         IRCONS = self.params.IR
         for i in range(D):
@@ -382,7 +392,7 @@ class Solver(object):
             DRIVER = 'd' + str(i)
             if self.params.TIMEMUTE >= 1: print("\nRestart Driver %d\n" % (i))
 
-            for TSize in range(2, R):
+            for TSize in range(2, MaxTSize+1):
                 INFEASIBELTRIP = set()
                 if self.params.TimeSwitch != 0 and time.clock() - BEGINTIME > self.params.TimeLIMIT:
                     break
@@ -479,10 +489,13 @@ class Solver(object):
                             if self.params.SIMDPRUN != 0:
                                 if i in SimilarD:
                                     UBRs = []
+                                    # Look through each similar driver
                                     for d1 in SimilarD[i]:
+                                        # if the set we are looking for is there, add to UBRS.
                                         if tuple(sorted(TUT)) in COST[d1]:
                                             simDcost = COST[d1][tuple(sorted(TUT))]
                                             simDsch = SCHEDULE[d1][tuple(sorted(TUT))]
+                                            # Processing the schedule in the right format
                                             if len(simDsch[0]) == 1:
                                                 SIMDRT = [(rqNum, 0) if rqNum == 'd' else (invReqList[rqNum], 0) for
                                                           rqNum in simDsch]
@@ -794,6 +807,7 @@ class Solver(object):
                 i2+=1
                 i+=1
                 continue
+            # If we are at the end of RT1's route, add rest of RT2
             elif RT1[i1][0] == 'd':
                 while(RT2[i2][0] != 'd'):
                     for UBR in UBRS:
@@ -806,6 +820,7 @@ class Solver(object):
                     i2+=1
                     i1+=1
                     break
+            # If we are at the end of RT2's route, add rest of RT1
             elif RT2[i2][0] == 'd':
                 while(RT1[i1][0] != 'd'):
                     for UBR in UBRS:
@@ -818,6 +833,7 @@ class Solver(object):
                     i1+=1
                     i2+=1
                     break
+            # If we visted the location twice already (one for ori, one for des)
             while(visited[RT1[i1][0]]) > 1:
                 if MUTEWITHINFUNCTION == 1:print('IN THE VISITED -1')
                 i1+=1
@@ -827,6 +843,8 @@ class Solver(object):
                 i2+=1
                 if RT2[i2][0] == 'd': break
             if RT1[i1][0] == 'd' or RT2[i2][0] =='d': continue
+            
+            # If they are equal add them in 
             if RT1[i1][0] == RT2[i2][0]:
                 if MUTEWITHINFUNCTION == 1:print('EQUAL')
                 for UBR in UBRS:
@@ -835,6 +853,7 @@ class Solver(object):
                 i1+=1
                 i2+=1
                 continue
+            # If they are diagnoally equal, add both of them possbilities in
             elif RT1[i1][0] == RT2[i2+1][0] and RT1[i1+1][0] == RT2[i2][0]:
                 if MUTEWITHINFUNCTION == 1:print('DIAG EQUAL')
                 if RT1[i1][1] <= RT2[i2][1]:
@@ -894,6 +913,8 @@ class Solver(object):
                 i1+=2
                 i2+=1
                 continue
+            # If none of them are true and I don't have too many UBRS
+            # add both order
             elif len(UBRS) <= THRESHOLD:
                 UBR2S = []
                 for UBR in UBRS:
@@ -990,6 +1011,10 @@ class Solver(object):
                                      for v in RTV.neighbors(tuple(trip)))
                         + y[j] == 1)
 
+
+
+        self.varX = x
+        self.varY = y
 
     # STABILITY CONSTRAINT
         AUDS = []
@@ -1127,6 +1152,15 @@ class Solver(object):
                         grb.quicksum(betaR[r] for r in range(R))
                         <=
                         Budget)
+            # NEED TO ADD RIDER IR CONSTRAINT
+            for i in range(R):
+                m.addConstr(betaR[i] + grb.quicksum(URS[int(dp[1:])][Sp][i]*x[int(dp[1:])][Sp]
+                                                    for Sp in RTV.neighbors(i)
+                                                    for dp in RTV.neighbors(tuple(Sp)))
+                            >= reqs[i].val-URLAMB[i]
+                            
+            
+            
             
                     
             
@@ -1179,6 +1213,8 @@ class Solver(object):
 ##                    print('d: '+str(d)+'  S: '+str(s))
 ##                    print(mu[d][s])
 ##                    print(x[d][s])
+
+
 
         ENDTIME = time.clock()
         if self.params.TIMEMUTE >=1: print("Matching Time %f" %(ENDTIME - MILPSTARTTIME))
@@ -1234,16 +1270,183 @@ class Solver(object):
         # CK: print("\n\TIME: %f" %(ENDTIME - BEGINTIME))
 
         # CK change: return value (1.0 or 0.0) instead of gurobi variable
-        for z in x:
-            for k, v in z.items():
-                z[k] = v.getAttr('X')
+        retX = [{} for i in range(D)]
+        for d in range(len(x)):
+            for k, v in x[d].items():
+                retX[d][k] = v.getAttr('X')
+
+
 
         INFCOST = self.computeInfCost(R, SCHEDULE)
         self.objCost = m.objVal-INFCOST
         self.driCost = driCost
         self.satRiderCost = satRiderCost
-        return m,x,objSW,objEff,ENDTIME-BEGINTIME
+        return m,retX,objSW,objEff,ENDTIME-BEGINTIME
     
+
+
+    def greedySolve(self, COST=None, STABLE=False, LAMB=True):
+        '''
+        :param COST: (optional) modified costs. By default we will use those used in the precomputation
+        :return:
+        '''
+        # Set aliases
+        drivers, reqs = self.drivers, self.requests
+        D, R = self.D, self.R
+        RTV, SCHEDULE = self.RTV, self.SCHEDULE
+##        STABLE = self.params.STABLE
+        if COST is None: COST = self.COST
+
+        if not self.preprocessed:
+            raise Exception('Have not preprocessed cost matrix!')
+
+        dlist = list(range(D))
+
+        MAXITER = D
+        for i in range(1,2):
+            MAXITER *= max(D-i,1)
+
+        minX = []
+        minObj = 2e9
+        maxX = []
+        maxObj = 0
+
+        
+            
+        for COUNT in range(MAXITER):
+            random.shuffle(dlist)
+            
+            x = []
+            for i in range(D):
+                x.append({})
+
+            # SET variables for each edge in RTV graph
+            for a,b in RTV.edges():
+                if type(a) != type('a') and type(b) != type('b'): continue
+                elif b[0] == 'd':
+                    v = int(b[1:])
+                    x[v][a] = 0
+
+            satRiders = set()
+            matching = []
+           
+
+            for d in dlist:
+                minD = 2e9
+                minS = 'EMPTY'+str(d)
+                for s in COST[d]:
+##                    print(s,minS,minD)
+                    if s[0] == 'E' and minD == 2e9:
+                        minS = s
+                        continue
+                    elif s[0] == 'E':
+                        continue
+                    elif len(satRiders.intersection(s)) > 0:
+                        continue
+                    elif COST[d][s]/len(s) < minD:
+                        minD = COST[d][s]/len(s)
+                        minS = s
+                matching.append((d,minS))
+                x[d][minS] = 1
+                for i in minS:
+                    satRiders.add(i)
+
+    ##            print(d,minS,'\n')
+                    
+
+
+            LAMBCOST =[]
+            for j in range(R):
+                if LAMB==True: LAMBCOST.append(reqs[j].lamb)
+                else: LAMBCOST.append(0)
+
+            obj = 0
+
+            obj = sum(COST[d][S]*x[d][S] 
+                                        for d in range(D)
+                                        for S in RTV.predecessors('d'+str(d)))
+
+            rangeR = set(range(R))
+            unsatRiders = rangeR - satRiders
+
+            obj += sum(LAMBCOST[j] for j in unsatRiders)
+            INFCOST = self.computeInfCost(R, SCHEDULE)
+            unCost = obj - INFCOST
+
+            if unCost < minObj:
+                minObj = unCost
+                minX = x
+                FINALunsatRiders = unsatRiders
+            if unCost > maxObj:
+                maxObj = unCost
+                maxX = x
+                
+
+        return obj, minX,maxX, FINALunsatRiders, minObj, maxObj
+
+##        ENDTIME = time.clock()
+##        if self.params.TIMEMUTE >=1: print("Matching Time %f" %(ENDTIME - MILPSTARTTIME))
+##        if self.params.TIMEMUTE >=1:  print("\n\nRTV3\t Total Time %f" %(ENDTIME - BEGINTIME))
+##
+##
+##        AUD = np.zeros(D) # altruistic Utility
+##        BUD = np.zeros(D) # Base utility
+##        UR = np.zeros(R)
+##        UDVSIT = -np.ones(D)
+##        URVSIT = -np.ones(R)
+##        driCost = 0
+##        satRiderCost = 0
+##        for i in range(D):
+##            for s in x[i]:
+##                if x[i][s].x > 0:
+##                    # CK: print(i,s,COST[i][s],x[i][s].x)
+##                    # CK: print('  ', SCHEDULE[i][s])
+##                    for (agnt, ti) in SCHEDULE[i][s]:
+##                        if agnt == 'd' and UDVSIT[i] ==-1:
+##                            AUD[i] = drivers[i].val
+##                            BUD[i] = drivers[i].val
+##                            AUD[i] -= drivers[i].cdev*abs(ti-drivers[i].pt)
+##                            BUD[i] -= drivers[i].cdev*abs(ti-drivers[i].pt)
+##                            driCost += drivers[i].cdev*abs(ti-drivers[i].pt)
+##                            UDVSIT[i] = ti
+##                        elif agnt == 'd':
+##                            AUD[i] -= drivers[i].cdet*(ti-UDVSIT[i])
+##                            BUD[i] -= drivers[i].cdet*(ti-UDVSIT[i])
+##                            driCost += drivers[i].cdet*(ti-UDVSIT[i])
+##                        elif URVSIT[agnt] == -1:
+##                            UR[agnt] = reqs[agnt].val
+##                            UR[agnt] -= reqs[agnt].cdev*abs(ti-reqs[agnt].pt)
+##                            URVSIT[agnt] = ti
+##                            satRiderCost += reqs[agnt].val
+##                            satRiderCost -= reqs[agnt].cdev*abs(ti-reqs[agnt].pt)
+##                        else:
+##                            UR[agnt] -= reqs[agnt].cdet*(ti-URVSIT[agnt])
+##                            AUD[i] += drivers[i].rho*UR[agnt]
+##                            satRiderCost -= reqs[agnt].cdet*(ti-URVSIT[agnt])
+##
+##        objSW = 0
+##        objEff = 0
+##
+##        for i in range(D):
+##            objSW += AUD[i]
+##            objEff += BUD[i]
+##            # CK: print('Utility of ', i,': ',BUD[i],"  ", AUD[i])
+##        for j in range(R):
+##            objSW += UR[j]
+##            objEff += UR[j]
+##            # CK: print('Utility of ',j,': ',UR[j])
+##        # CK: print("\n\TIME: %f" %(ENDTIME - BEGINTIME))
+##
+##        # CK change: return value (1.0 or 0.0) instead of gurobi variable
+##        for z in x:
+##            for k, v in z.items():
+##                z[k] = v.getAttr('X')
+##
+##        INFCOST = self.computeInfCost(R, SCHEDULE)
+##        self.objCost = m.objVal-INFCOST
+##        self.driCost = driCost
+##        self.satRiderCost = satRiderCost
+##        return m,x,objSW,objEff,ENDTIME-BEGINTIME
 
 
 if __name__ == '__main__':
@@ -1255,9 +1458,21 @@ if __name__ == '__main__':
     print('Generating data...')
     drivers, requests = generator.generate()
 
+    
+    drivers = []
+    requests = []
+    drivers.append(Driver( [40.4313251, -79.9265011] , [40.4568125, -79.93904119999999] , 430 , 500 , 460 , 2 , 3 , 1 , 1 , 1.2 , 199 ))
+    requests.append(Passenger( [40.430921, -79.926383] , [40.4568125, -79.93904119999999] , 430 , 500 , 460 , 3 , 1 , 1 , 100 , 199 ))
+
+    
+
     solver = Solver()
     solver.setData(drivers, requests)
+    solver.params.IR = 0    
     solver.preprocess()
+
+
+
 
     print('====================')
     print('Costs per driver')
@@ -1266,6 +1481,10 @@ if __name__ == '__main__':
     print('====================')
 
     m, x, objSW, objEff, time = solver.solve()
+
+    obj, minX,maxX, FINALunsatRiders, minObj, maxObj = solver.greedySolve()
+
+    
 ##    print(m.getAttr('x'))
 ##    for i in range(40):
 ##        print(x[i])
